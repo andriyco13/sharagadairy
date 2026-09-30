@@ -1,0 +1,118 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Group {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  schedules Schedule[]
+  subjects  Subject[]
+  users     User[]
+}
+
+model User {
+  id        String      @id @default(cuid())
+  email     String      @unique
+  name      String
+  password  String?
+  groupId   String?
+  createdAt DateTime    @default(now())
+  group     Group?      @relation(fields: [groupId], references: [id])
+  grades    UserGrade[]
+  tasks     UserTask[]
+  sessions  Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Subject {
+  id           String       @id @default(cuid())
+  name         String
+  groupId      String
+  controlType  ControlType  @default(EXAM)
+  lecturer     String?      // Викладач лекцій
+  practitioner String?      // Викладач практик/лабораторних
+  assignments  Assignment[]
+  schedules    Schedule[]
+  group        Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+model Schedule {
+  id          String     @id @default(cuid())
+  groupId     String
+  subjectId   String
+  dayOfWeek   Int        // 1 = Пн, 5 = Пт
+  weekType    WeekType   // ALL, EVEN, ODD
+  lessonOrder Int        // 1..8 пара
+  lessonType  LessonType @default(LECTURE) // Лекція чи Практика
+  startTime   String     // Наприклад "08:20"
+  endTime     String     // Наприклад "09:40"
+  room        String     // Номер аудиторії
+  teacher     String?    // Автоматично береться або вказується вручну
+  group       Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  subject     Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  userTasks   UserTask[]
+}
+
+model UserTask {
+  id          String    @id @default(cuid())
+  userId      String
+  scheduleId  String
+  content     String
+  isCompleted Boolean   @default(false)
+  dueDate     DateTime?
+  schedule    Schedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Assignment {
+  id         String      @id @default(cuid())
+  subjectId  String
+  title      String
+  maxScore   Float
+  dueDate    DateTime?
+  subject    Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  userGrades UserGrade[]
+}
+
+model UserGrade {
+  id           String     @id @default(cuid())
+  userId       String
+  assignmentId String
+  score        Float
+  earnedAt     DateTime   @default(now())
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assignmentId])
+}
+
+enum WeekType {
+  ALL
+  EVEN
+  ODD
+}
+
+enum ControlType {
+  EXAM
+  CREDIT
+}
+
+enum LessonType {
+  LECTURE
+  PRACTICE
+}
