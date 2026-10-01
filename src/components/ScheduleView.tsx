@@ -41,6 +41,10 @@ interface ScheduleViewProps {
     name: string;
     email: string;
     role?: 'STUDENT' | 'ADMIN';
+    notifyBrowser?: boolean;
+    notifyTelegram?: boolean;
+    telegramChatId?: string | null;
+    notifyMinutesBefore?: number;
     group: {
       name: string;
     } | null;

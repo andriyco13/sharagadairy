@@ -18,17 +18,23 @@ model Group {
 }
 
 model User {
-  id        String      @id @default(cuid())
-  email     String      @unique
-  name      String
-  password  String?
-  groupId   String?
-  role      Role        @default(STUDENT)
-  createdAt DateTime    @default(now())
-  group     Group?      @relation(fields: [groupId], references: [id])
-  grades    UserGrade[]
-  tasks     UserTask[]
-  sessions  Session[]
+  id                  String             @id @default(cuid())
+  email               String             @unique
+  name                String
+  password            String?
+  groupId             String?
+  role                Role               @default(STUDENT)
+  notifyBrowser       Boolean            @default(false)
+  notifyTelegram      Boolean            @default(false)
+  telegramChatId      String?
+  telegramAuthCode    String?            @unique
+  notifyMinutesBefore Int                @default(5)
+  createdAt           DateTime           @default(now())
+  group               Group?             @relation(fields: [groupId], references: [id])
+  grades              UserGrade[]
+  tasks               UserTask[]
+  sessions            Session[]
+  pushSubscriptions   PushSubscription[]
 }
 
 enum Role {
@@ -41,6 +47,16 @@ model Session {
   token     String   @unique
   userId    String
   expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
