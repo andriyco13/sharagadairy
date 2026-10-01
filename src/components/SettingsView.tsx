@@ -25,6 +25,7 @@ interface SettingsViewProps {
     id: string;
     name: string;
     email: string;
+    role?: 'STUDENT' | 'ADMIN';
     group: {
       name: string;
     } | null;
@@ -41,6 +42,7 @@ export function SettingsView({
   currentWeekType,
 }: SettingsViewProps) {
   const router = useRouter();
+  const isAdmin = user?.role === 'ADMIN';
   const [isPending, startTransition] = useTransition();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -156,27 +158,34 @@ export function SettingsView({
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
             <CalendarDays className="w-4 h-4 text-indigo-500" />
-            Керування розкладом {user?.group?.name ? `(${user.group.name})` : ''}
+            Розклад занять {user?.group?.name ? `(${user.group.name})` : ''}
           </h3>
           <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
             {totalSchedules} пар у розкладі
           </span>
         </div>
 
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-          Змінювати окремі пари можна прямо у щоденнику на вкладці <strong>«Розклад»</strong> через кнопку <em>«+ Додати пару»</em>, а також іконки редагування та видалення на кожній картці.
-          Якщо вам потрібно переглянути або змінити весь розклад групи на тиждень (Пн–Пт) — скористайтеся повним конструктором.
-        </p>
+        {isAdmin ? (
+          <>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+              Ви маєте права адміністратора. Ви можете керувати групами, дисциплінами та конструювати розклад у спеціальній панелі керування.
+            </p>
 
-        <div className="pt-2">
-          <Link
-            href="/onboarding/schedule"
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 text-xs font-bold text-white shadow-xs transition-colors"
-          >
-            <CalendarPlus className="w-4 h-4" />
-            <span>Відкрити повний тижневий конструктор розкладу</span>
-          </Link>
-        </div>
+            <div className="pt-2">
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 text-xs font-bold text-white shadow-xs transition-colors"
+              >
+                <CalendarPlus className="w-4 h-4" />
+                <span>Відкрити панель керування (/admin)</span>
+              </Link>
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+            Розклад формується та редагується адміністратором. Ви маєте режим перегляду розкладу та ведення власних завдань і відміток.
+          </p>
+        )}
       </div>
 
       {/* Database & App Information */}
@@ -203,42 +212,44 @@ export function SettingsView({
           </div>
         </div>
 
-        {/* Demo week filler */}
-        <div className="rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 p-4 border border-indigo-100 dark:border-indigo-900/60 mt-4">
-          <div className="flex items-start gap-3">
-            <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h4 className="text-sm font-bold text-indigo-950 dark:text-indigo-200">
-                Заповнити розклад на весь тиждень (Вт - Пт)
-              </h4>
-              <p className="mt-0.5 text-xs text-indigo-800/80 dark:text-indigo-300">
-                У початковому seed.ts розклад додано лише для Понеділка. Натисніть цю кнопку, якщо
-                бажаєте наповнити решту днів тижня зразковими парами.
-              </p>
+        {/* Demo week filler (ADMIN ONLY) */}
+        {isAdmin && (
+          <div className="rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 p-4 border border-indigo-100 dark:border-indigo-900/60 mt-4">
+            <div className="flex items-start gap-3">
+              <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-sm font-bold text-indigo-950 dark:text-indigo-200">
+                  Заповнити розклад на весь тиждень (Вт - Пт)
+                </h4>
+                <p className="mt-0.5 text-xs text-indigo-800/80 dark:text-indigo-300">
+                  У початковому seed.ts розклад додано лише для Понеділка. Натисніть цю кнопку, якщо
+                  бажаєте наповнити решту днів тижня зразковими парами.
+                </p>
 
-              {statusMessage && (
-                <div className="mt-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5" />
-                  {statusMessage}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={handleSeedDemo}
-                disabled={isPending}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors"
-              >
-                {isPending ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <CalendarPlus className="w-3.5 h-3.5" />
+                {statusMessage && (
+                  <div className="mt-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5" />
+                    {statusMessage}
+                  </div>
                 )}
-                <span>Наповнити повний тиждень</span>
-              </button>
+
+                <button
+                  type="button"
+                  onClick={handleSeedDemo}
+                  disabled={isPending}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors"
+                >
+                  {isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <CalendarPlus className="w-3.5 h-3.5" />
+                  )}
+                  <span>Наповнити повний тиждень</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* About App */}

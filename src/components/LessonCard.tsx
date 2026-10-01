@@ -72,6 +72,7 @@ interface LessonCardProps {
   schedule: ScheduleItem;
   activeDate: Date;
   isToday: boolean;
+  isAdmin?: boolean;
   currentGrade?: LessonGradeInfo | null;
   onGradeSaved?: (info: {
     subjectId: string;
@@ -88,6 +89,7 @@ export function LessonCard({
   schedule,
   activeDate,
   isToday,
+  isAdmin = false,
   currentGrade,
   onGradeSaved,
   onGradeDeleted,
@@ -352,32 +354,34 @@ export function LessonCard({
             </span>
           )}
 
-          {/* Edit and Delete Buttons */}
-          <div className="flex items-center gap-1 pl-1.5 border-l border-zinc-200 dark:border-zinc-800">
-            {onEditLesson && (
+          {/* Edit and Delete Buttons (ADMIN ONLY) */}
+          {isAdmin && (
+            <div className="flex items-center gap-1 pl-1.5 border-l border-zinc-200 dark:border-zinc-800">
+              {onEditLesson && (
+                <button
+                  type="button"
+                  onClick={() => onEditLesson(schedule)}
+                  title="Редагувати параметри пари"
+                  className="p-1 rounded-lg text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors cursor-pointer"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => onEditLesson(schedule)}
-                title="Редагувати параметри пари"
-                className="p-1 rounded-lg text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors cursor-pointer"
+                onClick={handleDeleteLesson}
+                disabled={isDeletingLesson}
+                title="Видалити пару з розкладу"
+                className="p-1 rounded-lg text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer disabled:opacity-50"
               >
-                <Pencil className="w-3.5 h-3.5" />
+                {isDeletingLesson ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
               </button>
-            )}
-            <button
-              type="button"
-              onClick={handleDeleteLesson}
-              disabled={isDeletingLesson}
-              title="Видалити пару з розкладу"
-              className="p-1 rounded-lg text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              {isDeletingLesson ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Trash2 className="w-3.5 h-3.5" />
-              )}
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       </div>
 

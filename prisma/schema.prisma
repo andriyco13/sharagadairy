@@ -23,11 +23,17 @@ model User {
   name      String
   password  String?
   groupId   String?
+  role      Role        @default(STUDENT)
   createdAt DateTime    @default(now())
   group     Group?      @relation(fields: [groupId], references: [id])
   grades    UserGrade[]
   tasks     UserTask[]
   sessions  Session[]
+}
+
+enum Role {
+  STUDENT
+  ADMIN
 }
 
 model Session {

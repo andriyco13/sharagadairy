@@ -51,15 +51,20 @@ export async function getCurrentUser(userIdOverride?: string) {
     }
 
     let token: string | undefined;
+    let isNextContext = false;
     try {
       const cookieStore = await cookies();
       token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+      isNextContext = true;
     } catch {
       // Outside Next.js request context
     }
 
     if (!token) {
-      // Fallback for non-cookie contexts (tests/scripts)
+      if (isNextContext) {
+        return null;
+      }
+      // Fallback only for non-cookie contexts (tests/scripts)
       const fallbackSession = await prisma.session.findFirst({
         where: { expiresAt: { gt: new Date() } },
         orderBy: { createdAt: 'desc' },
@@ -98,6 +103,37 @@ export async function getCurrentUser(userIdOverride?: string) {
   }
 }
 
+export async function verifyAdmin() {
+  const user = await getCurrentUser();
+  if (!user) {
+    return {
+      authorized: false as const,
+      status: 401,
+      error: '401 Unauthorized: Необхідно увійти в систему',
+      user: null,
+    };
+  }
+
+  if (user.role !== 'ADMIN') {
+    return {
+      authorized: false as const,
+      status: 403,
+      error: '403 Forbidden: Потрібні права адміністратора',
+      user,
+    };
+  }
+
+  return { authorized: true as const, status: 200, user };
+}
+
+export async function requireAdmin() {
+  const { authorized, error, user } = await verifyAdmin();
+  if (!authorized || !user) {
+    throw new Error(error || '403 Forbidden');
+  }
+  return user;
+}
+
 export async function destroySession(): Promise<void> {
   try {
     let token: string | undefined;
@@ -116,3 +152,4 @@ export async function destroySession(): Promise<void> {
     console.error('Error destroying session:', error);
   }
 }
+

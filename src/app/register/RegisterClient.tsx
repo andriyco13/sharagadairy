@@ -39,14 +39,9 @@ export default function RegisterClient({ initialGroups = [] }: RegisterClientPro
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Group choice: 'existing' | 'new'
-  const [groupChoice, setGroupChoice] = useState<'existing' | 'new'>(
-    initialGroups.length > 0 ? 'existing' : 'new'
-  );
   const [existingGroupId, setExistingGroupId] = useState<string>(
     initialGroups.length > 0 ? initialGroups[0].id : ''
   );
-  const [newGroupName, setNewGroupName] = useState<string>('');
 
   // Groups list from DB
   const [groups, setGroups] = useState<GroupItem[]>(initialGroups);
@@ -85,9 +80,6 @@ export default function RegisterClient({ initialGroups = [] }: RegisterClientPro
             }
             return data.groups[0].id;
           });
-          setGroupChoice('existing');
-        } else {
-          setGroupChoice('new');
         }
         return;
       }
@@ -105,9 +97,6 @@ export default function RegisterClient({ initialGroups = [] }: RegisterClientPro
               }
               return actionRes.groups[0].id;
             });
-            setGroupChoice('existing');
-          } else {
-            setGroupChoice('new');
           }
           return;
         }
@@ -131,19 +120,12 @@ export default function RegisterClient({ initialGroups = [] }: RegisterClientPro
         name,
         email,
         password,
-        groupChoice,
-        existingGroupId: groupChoice === 'existing' ? existingGroupId : undefined,
-        newGroupName: groupChoice === 'new' ? newGroupName : undefined,
+        groupChoice: 'existing',
+        existingGroupId,
       });
 
       if (res.success) {
-        if (res.isNewGroup) {
-          // New group created -> redirect to onboarding wizard to fill in schedule!
-          router.push('/onboarding/schedule');
-        } else {
-          // Joined existing group -> redirect directly to diary
-          router.push('/');
-        }
+        router.push('/');
         router.refresh();
       } else {
         setError(res.error || 'Помилка реєстрації');
@@ -265,6 +247,7 @@ export default function RegisterClient({ initialGroups = [] }: RegisterClientPro
             </div>
 
             {/* Group Selection Section with Two Switchers */}
+            {/* Group Selection Section */}
             <div className="pt-2">
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
@@ -298,101 +281,46 @@ export default function RegisterClient({ initialGroups = [] }: RegisterClientPro
                 </div>
               )}
 
-              {/* Two switchers / tabs */}
-              <div className="grid grid-cols-2 gap-2 rounded-2xl bg-zinc-100 dark:bg-zinc-800/80 p-1 mb-3.5">
-                <button
-                  type="button"
-                  onClick={() => setGroupChoice('existing')}
-                  className={`flex items-center justify-center gap-1.5 rounded-xl py-2 px-3 text-xs font-bold transition-all cursor-pointer ${
-                    groupChoice === 'existing'
-                      ? 'bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
-                      : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>Обрати існуючу</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setGroupChoice('new')}
-                  className={`flex items-center justify-center gap-1.5 rounded-xl py-2 px-3 text-xs font-bold transition-all cursor-pointer ${
-                    groupChoice === 'new'
-                      ? 'bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
-                      : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-                  }`}
-                >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  <span>Створити нову</span>
-                </button>
-              </div>
-
               {/* Existing group selector */}
-              {groupChoice === 'existing' && (
-                <div>
-                  {isFetchingGroups ? (
-                    <div className="flex items-center gap-2 py-3 text-xs text-zinc-400">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Завантаження груп...</span>
-                    </div>
-                  ) : groups.length > 0 ? (
-                    <div className="space-y-1.5">
-                      <select
-                        value={existingGroupId}
-                        onChange={(e) => setExistingGroupId(e.target.value)}
-                        className="block w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/50 py-2.5 px-3 text-sm font-semibold text-zinc-900 dark:text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      >
-                        {groups.map((g) => (
-                          <option key={g.id} value={g.id}>
-                            {g.name} ({g._count.schedules} пар, {g._count.users} студ.)
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                        Розклад та предмети цієї групи підтягнуться автоматично.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900">
-                      Наразі немає збережених груп. Будь ласка, оберіть «Створити нову групу» або натисніть «Оновити».
-                    </div>
-                  )}
+              {isFetchingGroups ? (
+                <div className="flex items-center gap-2 py-3 text-xs text-zinc-400">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Завантаження груп...</span>
                 </div>
-              )}
-
-              {/* Create new group input */}
-              {groupChoice === 'new' && (
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    required
-                    value={newGroupName}
-                    onChange={(e) => setNewGroupName(e.target.value)}
-                    placeholder="Наприклад: ІПЗ-22 або КН-32"
-                    className="block w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/50 py-2.5 px-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-indigo-500 focus:bg-white dark:focus:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  />
-                  <div className="flex items-start gap-1.5 text-[11px] text-indigo-600 dark:text-indigo-400">
-                    <CheckCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    <span>
-                      Після реєстрації відкриється зручний майстер розкладу, де ви зможете вказати пари для вашої групи.
-                    </span>
-                  </div>
+              ) : groups.length > 0 ? (
+                <div className="space-y-1.5">
+                  <select
+                    value={existingGroupId}
+                    onChange={(e) => setExistingGroupId(e.target.value)}
+                    className="block w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/50 py-2.5 px-3 text-sm font-semibold text-zinc-900 dark:text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name} ({g._count.schedules} пар, {g._count.users} студ.)
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Розклад та предмети цієї групи підтягнуться автоматично після входу.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900">
+                  Наразі немає збережених груп. Зверніться до адміністратора для створення групи або натисніть «Оновити».
                 </div>
               )}
             </div>
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || groups.length === 0}
               className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 py-2.5 px-4 text-sm font-bold text-white shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <>
-                  <span>
-                    {groupChoice === 'new' ? 'Продовжити до розкладу' : 'Зареєструватися'}
-                  </span>
+                  <span>Зареєструватися</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

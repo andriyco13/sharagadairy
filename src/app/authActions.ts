@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { hashPassword, verifyPassword, createSession, destroySession, getCurrentUser } from '@/lib/auth';
+import { hashPassword, verifyPassword, createSession, destroySession, getCurrentUser, verifyAdmin } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { WeekType, LessonType } from '@prisma/client';
 import { getBellSchedule } from '@/lib/constants';
@@ -127,23 +127,11 @@ export async function registerAction(data: RegisterParams): Promise<RegisterResu
       }
       finalGroupId = existingGroup.id;
     } else {
-      const groupName = (data.newGroupName || '').trim();
-      if (!groupName || groupName.length < 2) {
-        return { success: false, error: 'Введіть назву нової групи (наприклад: "ІПЗ-22")' };
-      }
-
-      // Check if group already exists with this name (case-insensitive find or create)
-      let group = await prisma.group.findFirst({
-        where: { name: { equals: groupName, mode: 'insensitive' } },
-      });
-
-      if (!group) {
-        group = await prisma.group.create({
-          data: { name: groupName },
-        });
-        isNewGroup = true;
-      }
-      finalGroupId = group.id;
+      // Disallow non-admin creation of groups during student registration
+      return {
+        success: false,
+        error: 'Створення нових груп доступне лише адміністраторам. Будь ласка, оберіть вашу навчальну групу зі списку.',
+      };
     }
 
     // Hash password & create user
@@ -154,6 +142,7 @@ export async function registerAction(data: RegisterParams): Promise<RegisterResu
         email,
         password: hashedPassword,
         groupId: finalGroupId,
+        role: 'STUDENT',
       },
     });
 
@@ -163,7 +152,7 @@ export async function registerAction(data: RegisterParams): Promise<RegisterResu
 
     return {
       success: true,
-      isNewGroup,
+      isNewGroup: false,
       groupId: finalGroupId || undefined,
     };
   } catch (error) {
@@ -214,9 +203,14 @@ export async function saveNewGroupScheduleAction(
   userIdOverride?: string
 ) {
   try {
-    const user = await getCurrentUser(userIdOverride);
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
+    }
+
+    const user = auth.user;
     if (!user || !user.groupId) {
-      return { success: false, error: 'Користувач не авторизований або не має привʼязаної групи' };
+      return { success: false, error: 'Користувач не має привʼязаної групи' };
     }
 
     const groupId = user.groupId;

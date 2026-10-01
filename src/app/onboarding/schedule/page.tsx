@@ -12,7 +12,7 @@ export default async function OnboardingSchedulePage() {
     redirect('/login');
   }
 
-  if (!user.groupId) {
+  if (user.role !== 'ADMIN' || !user.groupId) {
     redirect('/');
   }
 

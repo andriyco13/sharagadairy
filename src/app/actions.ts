@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, verifyAdmin } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { toDateKey } from '@/lib/dateUtils';
 import { ControlType, LessonType } from '@prisma/client';
@@ -68,6 +68,16 @@ export async function createTaskAction(
  */
 export async function toggleTaskAction(taskId: string, isCompleted: boolean) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: 'Необхідно увійти в систему' };
+    }
+
+    const task = await prisma.userTask.findUnique({ where: { id: taskId } });
+    if (!task || (task.userId !== user.id && user.role !== 'ADMIN')) {
+      return { success: false, error: '403 Forbidden: Доступ заборонено' };
+    }
+
     const updated = await prisma.userTask.update({
       where: { id: taskId },
       data: { isCompleted },
@@ -86,6 +96,16 @@ export async function toggleTaskAction(taskId: string, isCompleted: boolean) {
  */
 export async function deleteTaskAction(taskId: string) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: 'Необхідно увійти в систему' };
+    }
+
+    const task = await prisma.userTask.findUnique({ where: { id: taskId } });
+    if (!task || (task.userId !== user.id && user.role !== 'ADMIN')) {
+      return { success: false, error: '403 Forbidden: Доступ заборонено' };
+    }
+
     await prisma.userTask.delete({
       where: { id: taskId },
     });
@@ -314,6 +334,12 @@ export async function createAssignmentAction({
   score,
 }: CreateAssignmentParams) {
   try {
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
+    }
+    const user = auth.user;
+
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
       return { success: false, error: 'Назва роботи не може бути порожньою' };
@@ -322,11 +348,6 @@ export async function createAssignmentAction({
     const numMax = Number(maxScore);
     if (isNaN(numMax) || numMax <= 0) {
       return { success: false, error: 'Максимальний бал повинен бути більшим за 0' };
-    }
-
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, error: 'Необхідно увійти в систему' };
     }
 
     let parsedDueDate: Date | null = null;
@@ -397,6 +418,12 @@ export async function updateAssignmentAction({
   score,
 }: UpdateAssignmentParams) {
   try {
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
+    }
+    const user = auth.user;
+
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
       return { success: false, error: 'Назва роботи не може бути порожньою' };
@@ -405,11 +432,6 @@ export async function updateAssignmentAction({
     const numMax = Number(maxScore);
     if (isNaN(numMax) || numMax <= 0) {
       return { success: false, error: 'Максимальний бал повинен бути більшим за 0' };
-    }
-
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, error: 'Необхідно увійти в систему' };
     }
 
     let parsedDueDate: Date | null = null;
@@ -489,6 +511,11 @@ export async function updateAssignmentAction({
  */
 export async function deleteAssignmentAction(assignmentId: string) {
   try {
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
+    }
+
     await prisma.assignment.delete({
       where: { id: assignmentId },
     });
@@ -502,19 +529,127 @@ export async function deleteAssignmentAction(assignmentId: string) {
 }
 
 /**
- * Updates a subject's control type ('EXAM' | 'CREDIT')
+ * Group Management Actions (ADMIN ONLY)
+ */
+export async function createGroupAction(name: string) {
+  try {
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
+    }
+
+    const trimmed = name.trim();
+    if (!trimmed || trimmed.length < 2) {
+      return { success: false, error: 'Введіть коректну назву групи (мінімум 2 символи)' };
+    }
+
+    const existing = await prisma.group.findFirst({
+      where: { name: { equals: trimmed, mode: 'insensitive' } },
+    });
+
+    if (existing) {
+      return { success: false, error: 'Група з такою назвою вже існує' };
+    }
+
+    const group = await prisma.group.create({
+      data: { name: trimmed },
+    });
+
+    safeRevalidate('/admin');
+    safeRevalidate('/register');
+    return { success: true, group };
+  } catch (error) {
+    console.error('Error creating group:', error);
+    return { success: false, error: 'Не вдалося створити групу' };
+  }
+}
+
+export async function updateGroupAction(id: string, name: string) {
+  try {
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
+    }
+
+    const trimmed = name.trim();
+    if (!trimmed || trimmed.length < 2) {
+      return { success: false, error: 'Введіть коректну назву групи (мінімум 2 символи)' };
+    }
+
+    const existing = await prisma.group.findFirst({
+      where: {
+        name: { equals: trimmed, mode: 'insensitive' },
+        NOT: { id },
+      },
+    });
+
+    if (existing) {
+      return { success: false, error: 'Група з такою назвою вже існує' };
+    }
+
+    const group = await prisma.group.update({
+      where: { id },
+      data: { name: trimmed },
+    });
+
+    safeRevalidate('/admin');
+    safeRevalidate('/register');
+    safeRevalidate('/');
+    return { success: true, group };
+  } catch (error) {
+    console.error('Error updating group:', error);
+    return { success: false, error: 'Не вдалося оновити групу' };
+  }
+}
+
+export async function deleteGroupAction(id: string) {
+  try {
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
+    }
+
+    // Unassign users from this group first to preserve user accounts
+    await prisma.user.updateMany({
+      where: { groupId: id },
+      data: { groupId: null },
+    });
+
+    // Delete group (cascade deletes subjects and schedules per schema)
+    await prisma.group.delete({
+      where: { id },
+    });
+
+    safeRevalidate('/admin');
+    safeRevalidate('/register');
+    safeRevalidate('/');
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting group:', error);
+    return { success: false, error: 'Не вдалося видалити групу' };
+  }
+}
+
+/**
+ * Updates a subject's control type ('EXAM' | 'CREDIT') (ADMIN ONLY)
  */
 export async function updateSubjectControlTypeAction(
   subjectId: string,
   controlType: 'EXAM' | 'CREDIT'
 ) {
   try {
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
+    }
+
     const updated = await prisma.subject.update({
       where: { id: subjectId },
       data: { controlType },
     });
 
     safeRevalidate('/');
+    safeRevalidate('/admin');
     return { success: true, controlType: updated.controlType };
   } catch (error) {
     console.error('Error updating subject control type:', error);
@@ -524,19 +659,25 @@ export async function updateSubjectControlTypeAction(
 
 export interface CreateSubjectInput {
   name: string;
+  groupId?: string;
   controlType?: 'EXAM' | 'CREDIT';
   lecturer?: string | null;
   practitioner?: string | null;
 }
 
 /**
- * Creates a new subject for the student's group
+ * Creates a new subject for the specified or admin's group (ADMIN ONLY)
  */
 export async function createSubjectAction(input: CreateSubjectInput) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.groupId) {
-      return { success: false, error: 'Необхідно увійти в систему з привʼязаною групою' };
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
+    }
+
+    const targetGroupId = input.groupId || auth.user.groupId;
+    if (!targetGroupId) {
+      return { success: false, error: 'Не вказано навчальну групу' };
     }
 
     const trimmedName = input.name.trim();
@@ -546,7 +687,7 @@ export async function createSubjectAction(input: CreateSubjectInput) {
 
     const existing = await prisma.subject.findFirst({
       where: {
-        groupId: user.groupId,
+        groupId: targetGroupId,
         name: { equals: trimmedName, mode: 'insensitive' },
       },
     });
@@ -558,7 +699,7 @@ export async function createSubjectAction(input: CreateSubjectInput) {
     const subject = await prisma.subject.create({
       data: {
         name: trimmedName,
-        groupId: user.groupId,
+        groupId: targetGroupId,
         controlType: input.controlType === 'CREDIT' ? 'CREDIT' : 'EXAM',
         lecturer: input.lecturer?.trim() || null,
         practitioner: input.practitioner?.trim() || null,
@@ -567,7 +708,7 @@ export async function createSubjectAction(input: CreateSubjectInput) {
         assignments: {
           include: {
             userGrades: {
-              where: { userId: user.id },
+              where: { userId: auth.user.id },
             },
           },
         },
@@ -575,6 +716,7 @@ export async function createSubjectAction(input: CreateSubjectInput) {
     });
 
     safeRevalidate('/');
+    safeRevalidate('/admin');
     return { success: true, subject };
   } catch (error) {
     console.error('Error creating subject:', error);
@@ -585,19 +727,20 @@ export async function createSubjectAction(input: CreateSubjectInput) {
 export interface UpdateSubjectInput {
   id: string;
   name: string;
+  groupId?: string;
   controlType?: 'EXAM' | 'CREDIT';
   lecturer?: string | null;
   practitioner?: string | null;
 }
 
 /**
- * Updates an existing subject
+ * Updates an existing subject (ADMIN ONLY)
  */
 export async function updateSubjectAction(input: UpdateSubjectInput) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.groupId) {
-      return { success: false, error: 'Необхідно увійти в систему з привʼязаною групою' };
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
     }
 
     const trimmedName = input.name.trim();
@@ -609,14 +752,15 @@ export async function updateSubjectAction(input: UpdateSubjectInput) {
       where: { id: input.id },
     });
 
-    if (!existing || existing.groupId !== user.groupId) {
-      return { success: false, error: 'Предмет не знайдено або недостатньо прав' };
+    if (!existing) {
+      return { success: false, error: 'Предмет не знайдено' };
     }
 
     const updated = await prisma.subject.update({
       where: { id: input.id },
       data: {
         name: trimmedName,
+        groupId: input.groupId || existing.groupId,
         controlType: input.controlType === 'CREDIT' ? 'CREDIT' : 'EXAM',
         lecturer: input.lecturer?.trim() || null,
         practitioner: input.practitioner?.trim() || null,
@@ -625,7 +769,7 @@ export async function updateSubjectAction(input: UpdateSubjectInput) {
         assignments: {
           include: {
             userGrades: {
-              where: { userId: user.id },
+              where: { userId: auth.user.id },
             },
           },
         },
@@ -633,6 +777,7 @@ export async function updateSubjectAction(input: UpdateSubjectInput) {
     });
 
     safeRevalidate('/');
+    safeRevalidate('/admin');
     return { success: true, subject: updated };
   } catch (error) {
     console.error('Error updating subject:', error);
@@ -641,21 +786,21 @@ export async function updateSubjectAction(input: UpdateSubjectInput) {
 }
 
 /**
- * Deletes a subject
+ * Deletes a subject (ADMIN ONLY)
  */
 export async function deleteSubjectAction(id: string) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.groupId) {
-      return { success: false, error: 'Необхідно увійти в систему з привʼязаною групою' };
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
     }
 
     const existing = await prisma.subject.findUnique({
       where: { id },
     });
 
-    if (!existing || existing.groupId !== user.groupId) {
-      return { success: false, error: 'Предмет не знайдено або недостатньо прав' };
+    if (!existing) {
+      return { success: false, error: 'Предмет не знайдено' };
     }
 
     await prisma.subject.delete({
@@ -663,6 +808,7 @@ export async function deleteSubjectAction(id: string) {
     });
 
     safeRevalidate('/');
+    safeRevalidate('/admin');
     return { success: true };
   } catch (error) {
     console.error('Error deleting subject:', error);
@@ -671,16 +817,19 @@ export async function deleteSubjectAction(id: string) {
 }
 
 /**
- * Quick helper to populate demo classes for remaining days of the week if needed
+ * Quick helper to populate demo classes for remaining days of the week if needed (ADMIN ONLY)
  */
-export async function seedDemoWeekAction() {
+export async function seedDemoWeekAction(targetGroupId?: string) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.groupId) {
-      return { success: false, error: 'Користувача не знайдено або група не призначена' };
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
     }
 
-    const groupId = user.groupId;
+    const groupId = targetGroupId || auth.user.groupId;
+    if (!groupId) {
+      return { success: false, error: 'Користувача не знайдено або група не призначена' };
+    }
 
     const subjects = await prisma.subject.findMany({ where: { groupId } });
     if (subjects.length === 0) return { success: false, error: 'Предмети не знайдено' };
@@ -780,6 +929,7 @@ export async function seedDemoWeekAction() {
     }
 
     safeRevalidate('/');
+    safeRevalidate('/admin');
     return { success: true };
   } catch (error) {
     console.error('Error seeding demo week:', error);
@@ -788,6 +938,7 @@ export async function seedDemoWeekAction() {
 }
 
 export interface ScheduleItemInput {
+  groupId?: string;
   subjectId?: string;
   subjectName?: string;
   dayOfWeek: number;
@@ -801,13 +952,18 @@ export interface ScheduleItemInput {
 }
 
 /**
- * Creates a single schedule lesson for the student's group
+ * Creates a single schedule lesson for the group (ADMIN ONLY)
  */
 export async function createScheduleItemAction(input: ScheduleItemInput) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.groupId) {
-      return { success: false, error: 'Необхідно увійти в систему з привʼязаною групою' };
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
+    }
+
+    const targetGroupId = input.groupId || auth.user.groupId;
+    if (!targetGroupId) {
+      return { success: false, error: 'Не вказано навчальну групу' };
     }
 
     let subject = null;
@@ -817,7 +973,7 @@ export async function createScheduleItemAction(input: ScheduleItemInput) {
       subject = await prisma.subject.findFirst({
         where: {
           id: input.subjectId,
-          groupId: user.groupId,
+          groupId: targetGroupId,
         },
       });
     }
@@ -827,7 +983,7 @@ export async function createScheduleItemAction(input: ScheduleItemInput) {
       const trimmedSubject = input.subjectName.trim();
       subject = await prisma.subject.findFirst({
         where: {
-          groupId: user.groupId,
+          groupId: targetGroupId,
           name: { equals: trimmedSubject, mode: 'insensitive' },
         },
       });
@@ -836,7 +992,7 @@ export async function createScheduleItemAction(input: ScheduleItemInput) {
         subject = await prisma.subject.create({
           data: {
             name: trimmedSubject,
-            groupId: user.groupId,
+            groupId: targetGroupId,
             controlType: 'EXAM',
           },
         });
@@ -859,7 +1015,7 @@ export async function createScheduleItemAction(input: ScheduleItemInput) {
 
     const newSchedule = await prisma.schedule.create({
       data: {
-        groupId: user.groupId,
+        groupId: targetGroupId,
         subjectId: subject.id,
         dayOfWeek: input.dayOfWeek,
         lessonOrder: input.lessonOrder,
@@ -877,6 +1033,7 @@ export async function createScheduleItemAction(input: ScheduleItemInput) {
     });
 
     safeRevalidate('/');
+    safeRevalidate('/admin');
     return { success: true, schedule: newSchedule };
   } catch (error) {
     console.error('Error creating schedule item:', error);
@@ -885,22 +1042,24 @@ export async function createScheduleItemAction(input: ScheduleItemInput) {
 }
 
 /**
- * Updates an existing schedule lesson
+ * Updates an existing schedule lesson (ADMIN ONLY)
  */
 export async function updateScheduleItemAction(id: string, input: ScheduleItemInput) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.groupId) {
-      return { success: false, error: 'Необхідно увійти в систему з привʼязаною групою' };
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
     }
 
     const existing = await prisma.schedule.findUnique({
       where: { id },
     });
 
-    if (!existing || existing.groupId !== user.groupId) {
-      return { success: false, error: 'Пару не знайдено або недостатньо прав' };
+    if (!existing) {
+      return { success: false, error: 'Пару не знайдено' };
     }
+
+    const targetGroupId = input.groupId || existing.groupId;
 
     let subject = null;
 
@@ -908,7 +1067,7 @@ export async function updateScheduleItemAction(id: string, input: ScheduleItemIn
       subject = await prisma.subject.findFirst({
         where: {
           id: input.subjectId,
-          groupId: user.groupId,
+          groupId: targetGroupId,
         },
       });
     }
@@ -917,7 +1076,7 @@ export async function updateScheduleItemAction(id: string, input: ScheduleItemIn
       const trimmedSubject = input.subjectName.trim();
       subject = await prisma.subject.findFirst({
         where: {
-          groupId: user.groupId,
+          groupId: targetGroupId,
           name: { equals: trimmedSubject, mode: 'insensitive' },
         },
       });
@@ -926,7 +1085,7 @@ export async function updateScheduleItemAction(id: string, input: ScheduleItemIn
         subject = await prisma.subject.create({
           data: {
             name: trimmedSubject,
-            groupId: user.groupId,
+            groupId: targetGroupId,
             controlType: 'EXAM',
           },
         });
@@ -950,6 +1109,7 @@ export async function updateScheduleItemAction(id: string, input: ScheduleItemIn
     const updated = await prisma.schedule.update({
       where: { id },
       data: {
+        groupId: targetGroupId,
         subjectId: subject.id,
         dayOfWeek: input.dayOfWeek,
         lessonOrder: input.lessonOrder,
@@ -967,6 +1127,7 @@ export async function updateScheduleItemAction(id: string, input: ScheduleItemIn
     });
 
     safeRevalidate('/');
+    safeRevalidate('/admin');
     return { success: true, schedule: updated };
   } catch (error) {
     console.error('Error updating schedule item:', error);
@@ -975,21 +1136,21 @@ export async function updateScheduleItemAction(id: string, input: ScheduleItemIn
 }
 
 /**
- * Deletes a schedule lesson
+ * Deletes a schedule lesson (ADMIN ONLY)
  */
 export async function deleteScheduleLessonAction(id: string) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.groupId) {
-      return { success: false, error: 'Необхідно увійти в систему з привʼязаною групою' };
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
     }
 
     const existing = await prisma.schedule.findUnique({
       where: { id },
     });
 
-    if (!existing || existing.groupId !== user.groupId) {
-      return { success: false, error: 'Пару не знайдено або недостатньо прав' };
+    if (!existing) {
+      return { success: false, error: 'Пару не знайдено' };
     }
 
     await prisma.schedule.delete({
@@ -997,6 +1158,7 @@ export async function deleteScheduleLessonAction(id: string) {
     });
 
     safeRevalidate('/');
+    safeRevalidate('/admin');
     return { success: true };
   } catch (error) {
     console.error('Error deleting schedule item:', error);
@@ -1005,16 +1167,22 @@ export async function deleteScheduleLessonAction(id: string) {
 }
 
 /**
- * Replaces/saves full weekly schedule for current group
+ * Replaces/saves full weekly schedule for specified group (ADMIN ONLY)
  */
-export async function saveGroupWeeklyScheduleAction(lessons: ScheduleItemInput[]) {
+export async function saveGroupWeeklyScheduleAction(
+  lessons: ScheduleItemInput[],
+  targetGroupId?: string
+) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.groupId) {
-      return { success: false, error: 'Необхідно увійти в систему з привʼязаною групою' };
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
     }
 
-    const groupId = user.groupId;
+    const groupId = targetGroupId || auth.user.groupId;
+    if (!groupId) {
+      return { success: false, error: 'Не вказано навчальну групу' };
+    }
 
     const validLessons = lessons.filter(
       (l) =>
@@ -1031,6 +1199,7 @@ export async function saveGroupWeeklyScheduleAction(lessons: ScheduleItemInput[]
 
     if (validLessons.length === 0) {
       safeRevalidate('/');
+      safeRevalidate('/admin');
       return { success: true, count: 0 };
     }
 
@@ -1087,11 +1256,13 @@ export async function saveGroupWeeklyScheduleAction(lessons: ScheduleItemInput[]
     });
 
     safeRevalidate('/');
+    safeRevalidate('/admin');
     return { success: true, count: scheduleData.length };
   } catch (error) {
     console.error('Error saving full group schedule:', error);
     return { success: false, error: 'Не вдалося зберегти розклад' };
   }
 }
+
 
 

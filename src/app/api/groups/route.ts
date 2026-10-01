@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { verifyAdmin } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -50,3 +51,48 @@ export async function GET() {
     );
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return NextResponse.json(
+        { success: false, error: auth.error },
+        { status: auth.status }
+      );
+    }
+
+    const body = await req.json();
+    const name = body?.name?.trim();
+    if (!name || name.length < 2) {
+      return NextResponse.json(
+        { success: false, error: 'Введіть коректну назву групи (мінімум 2 символи)' },
+        { status: 400 }
+      );
+    }
+
+    const existing = await prisma.group.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' } },
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        { success: false, error: 'Група з такою назвою вже існує' },
+        { status: 400 }
+      );
+    }
+
+    const group = await prisma.group.create({
+      data: { name },
+    });
+
+    return NextResponse.json({ success: true, group }, { status: 201 });
+  } catch (error) {
+    console.error('Error creating group in /api/groups:', error);
+    return NextResponse.json(
+      { success: false, error: 'Помилка при створенні групи' },
+      { status: 500 }
+    );
+  }
+}
+

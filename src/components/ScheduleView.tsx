@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   CalendarDays,
   Sparkles,
@@ -15,6 +16,7 @@ import {
   LogOut,
   Loader2,
   Plus,
+  ShieldCheck,
 } from 'lucide-react';
 import { LessonCard, ScheduleItem } from './LessonCard';
 import { BottomNav, TabType } from './BottomNav';
@@ -38,6 +40,7 @@ interface ScheduleViewProps {
     id: string;
     name: string;
     email: string;
+    role?: 'STUDENT' | 'ADMIN';
     group: {
       name: string;
     } | null;
@@ -56,6 +59,7 @@ const DAYS = [
 
 export function ScheduleView({ user, schedules, subjects }: ScheduleViewProps) {
   const router = useRouter();
+  const isAdmin = user?.role === 'ADMIN';
   const [activeTab, setActiveTab] = useState<TabType>('schedule');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -314,6 +318,16 @@ export function ScheduleView({ user, schedules, subjects }: ScheduleViewProps) {
 
             {/* User Profile & Logout Button */}
             <div className="flex items-center gap-2 pl-1 sm:pl-2 sm:border-l sm:border-zinc-200 dark:sm:border-zinc-800">
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white px-2.5 py-1.5 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                  title="Панель керування"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-white" />
+                  <span className="hidden sm:inline">Панель керування</span>
+                </Link>
+              )}
               <span className="hidden sm:inline text-xs font-bold text-zinc-700 dark:text-zinc-300 max-w-[130px] truncate">
                 {user?.name}
               </span>
@@ -536,14 +550,16 @@ export function ScheduleView({ user, schedules, subjects }: ScheduleViewProps) {
                 <span className="text-xs text-zinc-500 dark:text-zinc-400 hidden sm:inline mr-1">
                   {weekNumber}-й тиждень ({weekType === 'ODD' ? 'Непарний' : 'Парний'})
                 </span>
-                <button
-                  type="button"
-                  onClick={() => handleOpenAddModal(selectedDay)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Додати пару</span>
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAddModal(selectedDay)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Додати пару</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -568,6 +584,7 @@ export function ScheduleView({ user, schedules, subjects }: ScheduleViewProps) {
                       onGradeSaved={handleGradeSaved}
                       onGradeDeleted={handleGradeDeleted}
                       onEditLesson={handleOpenEditModal}
+                      isAdmin={isAdmin}
                     />
                   );
                 })}
@@ -587,29 +604,31 @@ export function ScheduleView({ user, schedules, subjects }: ScheduleViewProps) {
                   привід відпочити або зробити домашнє завдання!
                 </p>
 
-                <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenAddModal(selectedDay)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-colors cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Додати пару на цей день</span>
-                  </button>
-
-                  {/* Option to seed full week if only Monday was populated */}
-                  {schedules.length <= 2 && (
+                {isAdmin && (
+                  <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
                     <button
                       type="button"
-                      onClick={handleSeedDemo}
-                      disabled={isDemoLoading}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 px-4 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors cursor-pointer"
+                      onClick={() => handleOpenAddModal(selectedDay)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-colors cursor-pointer"
                     >
-                      <Sparkles className="w-4 h-4 text-indigo-500" />
-                      <span>Додати зразковий розклад на всі дні тижня</span>
+                      <Plus className="w-4 h-4" />
+                      <span>Додати пару на цей день</span>
                     </button>
-                  )}
-                </div>
+
+                    {/* Option to seed full week if only Monday was populated */}
+                    {schedules.length <= 2 && (
+                      <button
+                        type="button"
+                        onClick={handleSeedDemo}
+                        disabled={isDemoLoading}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 px-4 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors cursor-pointer"
+                      >
+                        <Sparkles className="w-4 h-4 text-indigo-500" />
+                        <span>Додати зразковий розклад на всі дні тижня</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -617,7 +636,11 @@ export function ScheduleView({ user, schedules, subjects }: ScheduleViewProps) {
 
         {/* Grades Tab */}
         {activeTab === 'grades' && (
-          <GradesView subjects={subjectsState} onSubjectsChange={setSubjectsState} />
+          <GradesView
+            subjects={subjectsState}
+            onSubjectsChange={setSubjectsState}
+            isAdmin={isAdmin}
+          />
         )}
 
         {/* Settings Tab */}
