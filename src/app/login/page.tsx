@@ -73,7 +73,7 @@ export default function LoginPage() {
             <CalendarCheck2 className="w-8 h-8" />
           </div>
           <h2 className="mt-4 text-2xl sm:text-3xl font-black tracking-tight text-zinc-900 dark:text-white">
-            Шарага Diary
+            Sharaga
           </h2>
           <p className="mt-1.5 text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
             Вхід до персонального кабінету та розкладу

@@ -33,7 +33,7 @@ export default async function AdminLayout({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-                  Шарага Diary
+                  Sharaga
                 </span>
                 <span className="rounded-md bg-purple-100 dark:bg-purple-950/80 border border-purple-300 dark:border-purple-800 px-2 py-0.5 text-[11px] font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide">
                   Адмін-панель

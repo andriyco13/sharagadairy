@@ -204,7 +204,7 @@ export async function sendTestNotificationAction() {
     if (fullUser.telegramChatId) {
       telegramSent = await sendTelegramMessage(
         fullUser.telegramChatId,
-        `🔔 <b>Тестове сповіщення від Шарага Diary!</b>\n\nПривіт, ${fullUser.name}!\nТвій Telegram успішно налаштований. Тепер ти отримуватимеш нагадування про пари за 5 хвилин до початку! 🚀`
+        `🔔 <b>Тестове сповіщення від Sharaga!</b>\n\nПривіт, ${fullUser.name}!\nТвій Telegram успішно налаштований. Тепер ти отримуватимеш нагадування про пари за 5 хвилин до початку! 🚀`
       );
     }
 

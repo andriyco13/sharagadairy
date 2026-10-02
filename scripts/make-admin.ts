@@ -15,13 +15,16 @@ async function makeAdmin() {
       process.exit(1);
     }
   } else {
-    // Find the first created user
+    // Find owner or non-demo user
     targetUser = await prisma.user.findFirst({
+      where: {
+        email: { not: 'student@sharaga.ua' },
+      },
       orderBy: { createdAt: 'asc' },
     });
 
     if (!targetUser) {
-      console.error('У базі даних немає жодного користувача.');
+      console.error('Не знайдено підходящого користувача для призначення адміном.');
       process.exit(1);
     }
   }

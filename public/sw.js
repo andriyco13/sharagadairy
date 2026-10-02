@@ -10,7 +10,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('push', (event) => {
   let data = {
-    title: 'Шарага Diary',
+    title: 'Sharaga',
     body: 'Нагадування про пару!',
     url: '/',
   };

@@ -32,7 +32,6 @@ import {
   formatDateUk,
   formatWeekRangeUk,
   isSameCalendarDay,
-  findLessonGrade,
 } from '@/lib/dateUtils';
 
 interface ScheduleViewProps {
@@ -190,64 +189,6 @@ export function ScheduleView({ user, schedules, subjects }: ScheduleViewProps) {
     setViewMonday((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7));
   };
 
-  // Grade callback: optimistically update subjectsState when a grade is saved
-  const handleGradeSaved = (info: {
-    subjectId: string;
-    title: string;
-    score: number;
-    maxScore: number;
-    assignmentId?: string;
-  }) => {
-    setSubjectsState((prev) =>
-      prev.map((subj) => {
-        if (subj.id !== info.subjectId) return subj;
-
-        const existingIdx = subj.assignments.findIndex((a) => a.title === info.title);
-        if (existingIdx >= 0) {
-          const updatedAssignments = [...subj.assignments];
-          updatedAssignments[existingIdx] = {
-            ...updatedAssignments[existingIdx],
-            maxScore: info.maxScore,
-            userGrades: [
-              {
-                id: info.assignmentId || 'temp-grade',
-                score: info.score,
-                earnedAt: new Date(),
-              },
-            ],
-          };
-          return { ...subj, assignments: updatedAssignments };
-        } else {
-          const newAssignment = {
-            id: info.assignmentId || 'temp-a-' + Date.now(),
-            title: info.title,
-            maxScore: info.maxScore,
-            userGrades: [
-              {
-                id: 'temp-g-' + Date.now(),
-                score: info.score,
-                earnedAt: new Date(),
-              },
-            ],
-          };
-          return { ...subj, assignments: [...subj.assignments, newAssignment] };
-        }
-      })
-    );
-  };
-
-  const handleGradeDeleted = (info: { subjectId: string; title: string }) => {
-    setSubjectsState((prev) =>
-      prev.map((subj) => {
-        if (subj.id !== info.subjectId) return subj;
-        return {
-          ...subj,
-          assignments: subj.assignments.filter((a) => a.title !== info.title),
-        };
-      })
-    );
-  };
-
   const handleSeedDemo = async () => {
     setIsDemoLoading(true);
     await seedDemoWeekAction();
@@ -266,7 +207,7 @@ export function ScheduleView({ user, schedules, subjects }: ScheduleViewProps) {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-                  Шарага Diary
+                  Sharaga
                 </h1>
                 <span className="rounded-md bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
                   {user?.group?.name || 'Без групи'}
@@ -570,28 +511,16 @@ export function ScheduleView({ user, schedules, subjects }: ScheduleViewProps) {
             {/* List of Lesson Cards for Selected Day */}
             {daySchedules.length > 0 ? (
               <div className="space-y-4">
-                {daySchedules.map((schedule) => {
-                  const subject = subjectsState.find((s) => s.id === schedule.subjectId);
-                  const gradeInfo = findLessonGrade(
-                    subject?.assignments,
-                    activeDate,
-                    schedule.lessonOrder
-                  );
-
-                  return (
-                    <LessonCard
-                      key={schedule.id}
-                      schedule={schedule}
-                      activeDate={activeDate}
-                      isToday={isViewingToday}
-                      currentGrade={gradeInfo}
-                      onGradeSaved={handleGradeSaved}
-                      onGradeDeleted={handleGradeDeleted}
-                      onEditLesson={handleOpenEditModal}
-                      isAdmin={isAdmin}
-                    />
-                  );
-                })}
+                {daySchedules.map((schedule) => (
+                  <LessonCard
+                    key={schedule.id}
+                    schedule={schedule}
+                    activeDate={activeDate}
+                    isToday={isViewingToday}
+                    onEditLesson={handleOpenEditModal}
+                    isAdmin={isAdmin}
+                  />
+                ))}
               </div>
             ) : (
               /* Empty state when no lessons on selected day */

@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Шарага Diary — Розклад занять",
+  title: "Sharaga — Розклад занять",
   description: "Адаптивний розклад занять студента з домашніми завданнями та журналом успішності",
 };
 

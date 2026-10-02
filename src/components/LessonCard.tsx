@@ -11,10 +11,7 @@ import {
   Trash2,
   Loader2,
   BookOpen,
-  Award,
   Calendar,
-  Save,
-  CheckCircle2,
   Pencil,
   FlaskConical,
   GraduationCap,
@@ -23,8 +20,6 @@ import {
   createTaskAction,
   toggleTaskAction,
   deleteTaskAction,
-  saveLessonGradeAction,
-  deleteLessonGradeAction,
   deleteScheduleLessonAction,
 } from '@/app/actions';
 import { isSameCalendarDay, formatDateUk, toDateKey } from '@/lib/dateUtils';
@@ -61,27 +56,11 @@ export type ScheduleItem = {
   userTasks: UserTaskItem[];
 };
 
-export type LessonGradeInfo = {
-  assignmentId?: string;
-  title?: string;
-  score: number;
-  maxScore: number;
-};
-
 interface LessonCardProps {
   schedule: ScheduleItem;
   activeDate: Date;
   isToday: boolean;
   isAdmin?: boolean;
-  currentGrade?: LessonGradeInfo | null;
-  onGradeSaved?: (info: {
-    subjectId: string;
-    title: string;
-    score: number;
-    maxScore: number;
-    assignmentId?: string;
-  }) => void;
-  onGradeDeleted?: (info: { subjectId: string; title: string }) => void;
   onEditLesson?: (schedule: ScheduleItem) => void;
 }
 
@@ -90,9 +69,6 @@ export function LessonCard({
   activeDate,
   isToday,
   isAdmin = false,
-  currentGrade,
-  onGradeSaved,
-  onGradeDeleted,
   onEditLesson,
 }: LessonCardProps) {
   const router = useRouter();
@@ -104,32 +80,11 @@ export function LessonCard({
   const [isPending, startTransition] = useTransition();
   const [isAdding, setIsAdding] = useState(false);
 
-  // Grade inputs state
-  const [gradeScore, setGradeScore] = useState<string>(
-    currentGrade ? String(currentGrade.score) : ''
-  );
-  const [gradeMaxScore, setGradeMaxScore] = useState<string>(
-    currentGrade ? String(currentGrade.maxScore) : '5'
-  );
-  const [isSavingGrade, setIsSavingGrade] = useState(false);
-  const [gradeSuccessMessage, setGradeSuccessMessage] = useState<string | null>(null);
-
   // Synchronize tasks when schedule prop updates from server
   const [prevScheduleTasks, setPrevScheduleTasks] = useState(schedule.userTasks);
   if (schedule.userTasks !== prevScheduleTasks) {
     setPrevScheduleTasks(schedule.userTasks);
     setAllTasks(schedule.userTasks || []);
-  }
-
-  // Synchronize grade inputs when currentGrade or activeDate changes
-  const [prevGrade, setPrevGrade] = useState(currentGrade);
-  const [prevActiveDate, setPrevActiveDate] = useState(activeDate);
-  if (currentGrade !== prevGrade || activeDate !== prevActiveDate) {
-    setPrevGrade(currentGrade);
-    setPrevActiveDate(activeDate);
-    setGradeScore(currentGrade ? String(currentGrade.score) : '');
-    setGradeMaxScore(currentGrade ? String(currentGrade.maxScore) : '5');
-    setGradeSuccessMessage(null);
   }
 
   // Filter tasks specific to active calendar date
@@ -209,77 +164,6 @@ export function LessonCard({
     });
   };
 
-  const handleSaveGrade = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const numScore = parseFloat(gradeScore);
-    if (isNaN(numScore) || numScore < 0) {
-      alert('Будь ласка, введіть дійсний бал (0 або більше)');
-      return;
-    }
-
-    const numMax = parseFloat(gradeMaxScore) || Math.max(5, Math.ceil(numScore));
-
-    setIsSavingGrade(true);
-    setGradeSuccessMessage(null);
-
-    const res = await saveLessonGradeAction({
-      subjectId: schedule.subjectId,
-      scheduleId: schedule.id,
-      score: numScore,
-      maxScore: numMax,
-      date: activeDate,
-    });
-
-    setIsSavingGrade(false);
-
-    if (res.success && res.title) {
-      setGradeSuccessMessage('Бал збережено! Додано до "Успішності"');
-      if (onGradeSaved) {
-        onGradeSaved({
-          subjectId: schedule.subjectId,
-          title: res.title,
-          score: res.score ?? numScore,
-          maxScore: res.maxScore ?? numMax,
-          assignmentId: res.assignmentId,
-        });
-      }
-      setTimeout(() => {
-        setGradeSuccessMessage(null);
-      }, 3500);
-    } else {
-      alert(res.error || 'Не вдалося зберегти бал');
-    }
-  };
-
-  const handleDeleteGrade = async () => {
-    if (!confirm('Видалити бал за це заняття?')) return;
-
-    setIsSavingGrade(true);
-    const res = await deleteLessonGradeAction({
-      subjectId: schedule.subjectId,
-      scheduleId: schedule.id,
-      date: activeDate,
-    });
-    setIsSavingGrade(false);
-
-    if (res.success) {
-      setGradeScore('');
-      setGradeMaxScore('5');
-      setGradeSuccessMessage('Бал видалено');
-      if (onGradeDeleted && currentGrade?.title) {
-        onGradeDeleted({
-          subjectId: schedule.subjectId,
-          title: currentGrade.title,
-        });
-      }
-      setTimeout(() => {
-        setGradeSuccessMessage(null);
-      }, 3000);
-    } else {
-      alert(res.error || 'Не вдалося видалити бал');
-    }
-  };
-
   const handleDeleteLesson = async () => {
     if (!confirm(`Видалити "${schedule.subject.name}" (${schedule.lessonOrder} пара) з розкладу вашої групи?`)) {
       return;
@@ -295,7 +179,6 @@ export function LessonCard({
   };
 
   const completedCount = displayedTasks.filter((t) => t.isCompleted).length;
-  const hasExistingGrade = currentGrade !== null && currentGrade !== undefined;
 
   return (
     <div
@@ -412,99 +295,6 @@ export function LessonCard({
             )}
           </div>
         </div>
-      </div>
-
-      {/* Grade for this Lesson Section */}
-      <div className="mt-4 rounded-xl bg-amber-50/40 dark:bg-amber-950/20 p-3.5 border border-amber-200/60 dark:border-amber-900/40">
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="flex items-center gap-1.5">
-            <Award className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-            <span className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300">
-              Бал за заняття
-            </span>
-            <span className="text-[11px] text-amber-700/80 dark:text-amber-400/80">
-              ({formatDateUk(activeDate)})
-            </span>
-          </div>
-
-          {hasExistingGrade && (
-            <div className="flex items-center gap-1">
-              <span className="rounded-md bg-amber-100 dark:bg-amber-900/60 px-2 py-0.5 text-xs font-bold text-amber-900 dark:text-amber-200">
-                {currentGrade.score} / {currentGrade.maxScore} б.
-              </span>
-              <button
-                type="button"
-                onClick={handleDeleteGrade}
-                disabled={isSavingGrade}
-                className="p-1 text-zinc-400 hover:text-red-500 transition-colors rounded hover:bg-white/80 dark:hover:bg-zinc-800"
-                title="Видалити бал"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Input form */}
-        <form onSubmit={handleSaveGrade} className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 shrink-0">
-              Бал:
-            </span>
-            <input
-              type="number"
-              step="0.5"
-              min="0"
-              max="100"
-              value={gradeScore}
-              onChange={(e) => setGradeScore(e.target.value)}
-              placeholder="0"
-              disabled={isSavingGrade}
-              className="w-16 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2.5 py-1 text-sm font-bold text-center text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
-            />
-            <span className="text-xs text-zinc-400">з</span>
-            <input
-              type="number"
-              step="1"
-              min="1"
-              max="100"
-              value={gradeMaxScore}
-              onChange={(e) => setGradeMaxScore(e.target.value)}
-              placeholder="5"
-              disabled={isSavingGrade}
-              className="w-14 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-xs text-center text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
-              title="Максимальний бал"
-            />
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">б.</span>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSavingGrade || !gradeScore}
-            className="inline-flex items-center justify-center gap-1 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 disabled:text-zinc-400 px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-colors shrink-0"
-          >
-            {isSavingGrade ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : hasExistingGrade ? (
-              <>
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Оновити</span>
-              </>
-            ) : (
-              <>
-                <Save className="w-3.5 h-3.5" />
-                <span>Зберегти</span>
-              </>
-            )}
-          </button>
-        </form>
-
-        {gradeSuccessMessage && (
-          <p className="mt-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-            <Check className="w-3 h-3 stroke-[3]" />
-            {gradeSuccessMessage}
-          </p>
-        )}
       </div>
 
       {/* Homework / UserTask Section */}

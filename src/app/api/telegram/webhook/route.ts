@@ -40,14 +40,14 @@ export async function POST(req: NextRequest) {
 
           await sendTelegramMessage(
             chatId,
-            `🎉 <b>Привіт, ${user.name}!</b>\n\nТвій Telegram успішно підключено до <b>Шарага Diary</b>.\n\n🔔 <b>Що далі:</b>\nТи автоматично отримуватимеш нагадування про пари за 5 хвилин до дзвінка з повною інформацією про аудиторію та викладача.\n\nБажаємо легких сесій та продуктивних пар! 🎓`
+            `🎉 <b>Привіт, ${user.name}!</b>\n\nТвій Telegram успішно підключено до <b>Sharaga</b>.\n\n🔔 <b>Що далі:</b>\nТи автоматично отримуватимеш нагадування про пари за 5 хвилин до дзвінка з повною інформацією про аудиторію та викладача.\n\nБажаємо легких сесій та продуктивних пар! 🎓`
           );
 
           return NextResponse.json({ ok: true, status: 'linked', userId: user.id });
         } else {
           await sendTelegramMessage(
             chatId,
-            `⚠️ <b>Код авторизації недійсний або застарілий.</b>\n\nБудь ласка, відкрийте <b>Шарага Diary</b> у розділі «Налаштування» та знову натисніть кнопку «Підключити Telegram».`
+            `⚠️ <b>Код авторизації недійсний або застарілий.</b>\n\nБудь ласка, відкрийте <b>Sharaga</b> у розділі «Налаштування» та знову натисніть кнопку «Підключити Telegram».`
           );
           return NextResponse.json({ ok: true, status: 'invalid_code' });
         }
@@ -60,12 +60,12 @@ export async function POST(req: NextRequest) {
         if (existingUser) {
           await sendTelegramMessage(
             chatId,
-            `🎓 <b>Привіт, ${existingUser.name}!</b>\n\nТвій акаунт уже підключений до сповіщень <b>Шарага Diary</b>.\nСповіщення активні: ${existingUser.notifyTelegram ? '✅ Так' : '❌ Ні (можна увімкнути на сайті)'}.`
+            `🎓 <b>Привіт, ${existingUser.name}!</b>\n\nТвій акаунт уже підключений до сповіщень <b>Sharaga</b>.\nСповіщення активні: ${existingUser.notifyTelegram ? '✅ Так' : '❌ Ні (можна увімкнути на сайті)'}.`
           );
         } else {
           await sendTelegramMessage(
             chatId,
-            `👋 <b>Привіт!</b>\n\nЦе офіційний бот <b>Шарага Diary</b> для нагадування про пари за 5 хвилин до початку.\n\nЩоб зв'язати свій акаунт, перейдіть на сайт у <b>Налаштування</b> та натисніть кнопку <b>«Підключити Telegram»</b>.`
+            `👋 <b>Привіт!</b>\n\nЦе офіційний бот <b>Sharaga</b> для нагадування про пари за 5 хвилин до початку.\n\nЩоб зв'язати свій акаунт, перейдіть на сайт у <b>Налаштування</b> та натисніть кнопку <b>«Підключити Telegram»</b>.`
           );
         }
 
@@ -103,6 +103,6 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     status: 'online',
-    service: 'Sharaga Diary Telegram Webhook',
+    service: 'Sharaga Telegram Webhook',
   });
 }
