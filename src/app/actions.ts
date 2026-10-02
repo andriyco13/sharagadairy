@@ -121,8 +121,8 @@ export async function deleteTaskAction(taskId: string) {
 export interface SaveLessonGradeParams {
   subjectId: string;
   scheduleId?: string;
-  score: number;
-  maxScore?: number;
+  score: number | string;
+  maxScore?: number | string;
   date: string | Date;
 }
 
@@ -139,7 +139,9 @@ export async function saveLessonGradeAction({
   date,
 }: SaveLessonGradeParams) {
   try {
-    const numScore = Number(score);
+    const parsedScore =
+      typeof score === 'string' ? parseFloat(score.replace(',', '.')) : Number(score);
+    const numScore = Math.round((parsedScore + Number.EPSILON) * 10) / 10;
     if (isNaN(numScore) || numScore < 0) {
       return { success: false, error: 'Введіть коректний бал (число від 0)' };
     }
@@ -168,8 +170,17 @@ export async function saveLessonGradeAction({
 
     const assignmentTitle = `Бал за заняття ${formattedDate}${lessonLabel}`;
 
-    // Compute max score: if provided use it, otherwise max(5, score)
-    const finalMaxScore = maxScore && maxScore > 0 ? Number(maxScore) : Math.max(5, Math.ceil(numScore));
+    // Compute max score: if provided use it, otherwise max(5, ceil(numScore))
+    let parsedMax: number | undefined = undefined;
+    if (maxScore !== undefined && maxScore !== null && String(maxScore).trim() !== '') {
+      const pm =
+        typeof maxScore === 'string' ? parseFloat(maxScore.replace(',', '.')) : Number(maxScore);
+      if (!isNaN(pm)) {
+        parsedMax = Math.round((pm + Number.EPSILON) * 10) / 10;
+      }
+    }
+    const finalMaxScore =
+      parsedMax && parsedMax > 0 ? parsedMax : Math.max(5, Math.ceil(numScore));
 
     // Check if assignment already exists
     let assignment = await prisma.assignment.findFirst({
@@ -318,9 +329,9 @@ export async function deleteLessonGradeAction(params: {
 export interface CreateAssignmentParams {
   subjectId: string;
   title: string;
-  maxScore: number;
+  maxScore: number | string;
   dueDate?: string | Date | null;
-  score?: number | null;
+  score?: number | string | null;
 }
 
 /**
@@ -345,7 +356,9 @@ export async function createAssignmentAction({
       return { success: false, error: 'Назва роботи не може бути порожньою' };
     }
 
-    const numMax = Number(maxScore);
+    const parsedMax =
+      typeof maxScore === 'string' ? parseFloat(maxScore.replace(',', '.')) : Number(maxScore);
+    const numMax = Math.round((parsedMax + Number.EPSILON) * 10) / 10;
     if (isNaN(numMax) || numMax <= 0) {
       return { success: false, error: 'Максимальний бал повинен бути більшим за 0' };
     }
@@ -360,8 +373,19 @@ export async function createAssignmentAction({
       }
     }
 
-    const hasGrade = score !== null && score !== undefined && !isNaN(Number(score));
-    const numScore = hasGrade ? Number(score) : null;
+    const hasGrade =
+      score !== null &&
+      score !== undefined &&
+      (typeof score === 'string'
+        ? score.trim() !== '' && !isNaN(parseFloat(score.replace(',', '.')))
+        : !isNaN(Number(score)));
+    const numScore = hasGrade
+      ? Math.round(
+          ((typeof score === 'string' ? parseFloat(score.replace(',', '.')) : Number(score)) +
+            Number.EPSILON) *
+            10
+        ) / 10
+      : null;
 
     if (numScore !== null && (numScore < 0 || numScore > numMax)) {
       return { success: false, error: `Бал повинен бути від 0 до ${numMax}` };
@@ -402,9 +426,9 @@ export async function createAssignmentAction({
 export interface UpdateAssignmentParams {
   assignmentId: string;
   title: string;
-  maxScore: number;
+  maxScore: number | string;
   dueDate?: string | Date | null;
-  score?: number | null;
+  score?: number | string | null;
 }
 
 /**
@@ -429,7 +453,9 @@ export async function updateAssignmentAction({
       return { success: false, error: 'Назва роботи не може бути порожньою' };
     }
 
-    const numMax = Number(maxScore);
+    const parsedMax =
+      typeof maxScore === 'string' ? parseFloat(maxScore.replace(',', '.')) : Number(maxScore);
+    const numMax = Math.round((parsedMax + Number.EPSILON) * 10) / 10;
     if (isNaN(numMax) || numMax <= 0) {
       return { success: false, error: 'Максимальний бал повинен бути більшим за 0' };
     }
@@ -444,8 +470,19 @@ export async function updateAssignmentAction({
       }
     }
 
-    const hasGrade = score !== null && score !== undefined && !isNaN(Number(score));
-    const numScore = hasGrade ? Number(score) : null;
+    const hasGrade =
+      score !== null &&
+      score !== undefined &&
+      (typeof score === 'string'
+        ? score.trim() !== '' && !isNaN(parseFloat(score.replace(',', '.')))
+        : !isNaN(Number(score)));
+    const numScore = hasGrade
+      ? Math.round(
+          ((typeof score === 'string' ? parseFloat(score.replace(',', '.')) : Number(score)) +
+            Number.EPSILON) *
+            10
+        ) / 10
+      : null;
 
     if (numScore !== null && (numScore < 0 || numScore > numMax)) {
       return { success: false, error: `Бал повинен бути від 0 до ${numMax}` };

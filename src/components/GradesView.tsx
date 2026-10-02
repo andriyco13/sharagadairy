@@ -48,6 +48,11 @@ export type SubjectWithGrades = {
   }[];
 };
 
+const round1 = (val: number | null | undefined): number => {
+  if (val === null || val === undefined || isNaN(val)) return 0;
+  return Math.round((val + Number.EPSILON) * 10) / 10;
+};
+
 const subscribeCalcExpanded = (callback: () => void) => {
   window.addEventListener('storage', callback);
   window.addEventListener('local-storage-scholarship-calc', callback);
@@ -121,10 +126,11 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
 
   // Helper to compute actual earned semester score for a subject
   const getSubjectActualEarned = (subject: SubjectWithGrades) => {
-    return subject.assignments.reduce((sum, a) => {
+    const raw = subject.assignments.reduce((sum, a) => {
       const score = a.userGrades[0]?.score || 0;
       return sum + score;
     }, 0);
+    return round1(raw);
   };
 
   // Helper to get simulated or default scores for an exam subject
@@ -134,7 +140,7 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
 
     const actual = getSubjectActualEarned(subject);
     // Cap default semester score at 60
-    const defaultSemester = Math.min(60, Math.round(actual * 10) / 10);
+    const defaultSemester = Math.min(60, round1(actual));
     // Default expected exam score: 35 out of 40 (or 0 if semester is 0)
     const defaultExam = defaultSemester > 0 ? 35 : 30;
 
@@ -142,7 +148,8 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
   };
 
   const handleSimulatedSemesterChange = (subjectId: string, val: number) => {
-    const clamped = Math.max(0, Math.min(60, isNaN(val) ? 0 : val));
+    const rounded = round1(val);
+    const clamped = Math.max(0, Math.min(60, isNaN(rounded) ? 0 : rounded));
     setSimulatedScores((prev) => ({
       ...prev,
       [subjectId]: {
@@ -153,7 +160,8 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
   };
 
   const handleSimulatedExamChange = (subjectId: string, val: number) => {
-    const clamped = Math.max(0, Math.min(40, isNaN(val) ? 0 : val));
+    const rounded = round1(val);
+    const clamped = Math.max(0, Math.min(40, isNaN(rounded) ? 0 : rounded));
     setSimulatedScores((prev) => ({
       ...prev,
       [subjectId]: {
@@ -165,7 +173,7 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
 
   const handleResetSubjectSimulation = (subject: SubjectWithGrades) => {
     const actual = getSubjectActualEarned(subject);
-    const defaultSemester = Math.min(60, Math.round(actual * 10) / 10);
+    const defaultSemester = Math.min(60, round1(actual));
     setSimulatedScores((prev) => ({
       ...prev,
       [subject.id]: { semester: defaultSemester, exam: 35 },
@@ -200,12 +208,12 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
   // Calculate scholarship rating immutably
   const examDetails = examSubjects.map((s) => {
     const sim = getSubjectSimulated(s);
-    const total = Math.min(100, Math.round((sim.semester + sim.exam) * 10) / 10);
+    const total = Math.min(100, round1(sim.semester + sim.exam));
 
     return {
       subject: s,
-      semester: sim.semester,
-      exam: sim.exam,
+      semester: round1(sim.semester),
+      exam: round1(sim.exam),
       total,
     };
   });
@@ -264,9 +272,12 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
     setModalInitialData({
       id: assignment.id,
       title: assignment.title,
-      maxScore: assignment.maxScore,
+      maxScore: round1(assignment.maxScore),
       dueDate: assignment.dueDate,
-      score: assignment.userGrades[0]?.score ?? null,
+      score:
+        assignment.userGrades[0]?.score !== undefined && assignment.userGrades[0]?.score !== null
+          ? round1(assignment.userGrades[0].score)
+          : null,
     });
     setIsModalOpen(true);
   };
@@ -520,11 +531,22 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
                     type="number"
                     min="0"
                     max="10"
-                    step="0.5"
+                    step="0.1"
                     value={activityPoints}
                     onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      setActivityPoints(Math.max(0, Math.min(10, isNaN(val) ? 0 : val)));
+                      const clean = e.target.value.replace(',', '.');
+                      const val = parseFloat(clean);
+                      setActivityPoints(Math.max(0, Math.min(10, isNaN(val) ? 0 : round1(val))));
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === ',') {
+                        e.preventDefault();
+                        const current = String(activityPoints);
+                        if (!current.includes('.')) {
+                          const val = parseFloat(current + '.');
+                          setActivityPoints(Math.max(0, Math.min(10, isNaN(val) ? 0 : round1(val))));
+                        }
+                      }
                     }}
                     className="w-14 rounded-lg bg-black/40 border border-white/20 px-2 py-0.5 text-xs font-bold text-center text-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
                   />
@@ -592,14 +614,26 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
                                 type="number"
                                 min="0"
                                 max="60"
-                                step="0.5"
+                                step="0.1"
                                 value={semester}
                                 onChange={(e) =>
                                   handleSimulatedSemesterChange(
                                     subject.id,
-                                    parseFloat(e.target.value)
+                                    parseFloat(e.target.value.replace(',', '.'))
                                   )
                                 }
+                                onKeyDown={(e) => {
+                                  if (e.key === ',') {
+                                    e.preventDefault();
+                                    const current = String(semester);
+                                    if (!current.includes('.')) {
+                                      handleSimulatedSemesterChange(
+                                        subject.id,
+                                        parseFloat(current + '.')
+                                      );
+                                    }
+                                  }
+                                }}
                                 className="w-full rounded-md bg-white/10 border border-white/15 px-2 py-1 text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
                               />
                               <span className="text-[11px] text-zinc-400">/ 60</span>
@@ -620,11 +654,26 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
                                 type="number"
                                 min="0"
                                 max="40"
-                                step="0.5"
+                                step="0.1"
                                 value={exam}
                                 onChange={(e) =>
-                                  handleSimulatedExamChange(subject.id, parseFloat(e.target.value))
+                                  handleSimulatedExamChange(
+                                    subject.id,
+                                    parseFloat(e.target.value.replace(',', '.'))
+                                  )
                                 }
+                                onKeyDown={(e) => {
+                                  if (e.key === ',') {
+                                    e.preventDefault();
+                                    const current = String(exam);
+                                    if (!current.includes('.')) {
+                                      handleSimulatedExamChange(
+                                        subject.id,
+                                        parseFloat(current + '.')
+                                      );
+                                    }
+                                  }
+                                }}
                                 className="w-full rounded-md bg-white/10 border border-white/15 px-2 py-1 text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
                               />
                               <span className="text-[11px] text-zinc-400">/ 40</span>
@@ -691,23 +740,26 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
           </div>
         ) : (
           subjects.map((subject) => {
-            let subjEarned = 0;
-            let subjMax = 0;
-            let subjLost = 0;
+            let rawSubjEarned = 0;
+            let rawSubjMax = 0;
+            let rawSubjLost = 0;
             let subjGradedCount = 0;
 
             subject.assignments.forEach((a) => {
-              subjMax += a.maxScore;
+              rawSubjMax += a.maxScore;
               if (a.userGrades.length > 0) {
                 const s = a.userGrades[0].score;
-                subjEarned += s;
+                rawSubjEarned += s;
                 subjGradedCount++;
                 if (s < a.maxScore) {
-                  subjLost += a.maxScore - s;
+                  rawSubjLost += a.maxScore - s;
                 }
               }
             });
 
+            const subjEarned = round1(rawSubjEarned);
+            const subjMax = round1(rawSubjMax);
+            const subjLost = round1(rawSubjLost);
             const subjPercentage = subjMax > 0 ? Math.round((subjEarned / subjMax) * 100) : 0;
             const sortedAssignments = sortAssignmentsByDate(subject.assignments);
             const isExam = (subject.controlType || 'EXAM') === 'EXAM';
@@ -819,7 +871,7 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
                         )}
                         {subjMax > 0 && subjLost > 0 && (
                           <span className="text-[10px] text-zinc-400">
-                            (макс. {subjMax - subjLost} б.)
+                            (макс. {round1(subjMax - subjLost)} б.)
                           </span>
                         )}
                       </div>
@@ -866,9 +918,11 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
                     sortedAssignments.map((assignment) => {
                       const grade = assignment.userGrades[0];
                       const hasGrade = grade !== undefined;
+                      const aScore = hasGrade ? round1(grade.score) : 0;
+                      const aMax = round1(assignment.maxScore);
                       const lostOnAssignment =
-                        hasGrade && grade.score < assignment.maxScore
-                          ? assignment.maxScore - grade.score
+                        hasGrade && aScore < aMax
+                          ? round1(aMax - aScore)
                           : 0;
 
                       const deadlineStatus = getDeadlineStatus(assignment.dueDate, hasGrade);
@@ -920,7 +974,7 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
                               {hasGrade ? (
                                 <div className="flex items-center gap-1">
                                   <span className="rounded-md bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-emerald-700 dark:text-emerald-300 font-bold text-xs sm:text-sm">
-                                    {grade.score} / {assignment.maxScore} б.
+                                    {aScore} / {aMax} б.
                                   </span>
                                   {lostOnAssignment > 0 && (
                                     <span className="text-[10px] font-bold text-rose-500">
@@ -930,7 +984,7 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
                                 </div>
                               ) : (
                                 <span className="rounded-md bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-zinc-400 dark:text-zinc-500 text-xs">
-                                  до {assignment.maxScore} б.
+                                  до {aMax} б.
                                 </span>
                               )}
                             </div>

@@ -65,7 +65,9 @@ export function AssignmentModal({
 
   const [title, setTitle] = useState(initialData?.title || '');
   const [maxScore, setMaxScore] = useState<string>(
-    initialData ? String(initialData.maxScore) : '10'
+    initialData
+      ? String(Math.round((initialData.maxScore + Number.EPSILON) * 10) / 10)
+      : '10'
   );
   const [dueDate, setDueDate] = useState<string>(
     initialData?.dueDate ? toDateKey(initialData.dueDate) || '' : ''
@@ -75,7 +77,7 @@ export function AssignmentModal({
   );
   const [score, setScore] = useState<string>(
     initialData?.score !== null && initialData?.score !== undefined
-      ? String(initialData.score)
+      ? String(Math.round((initialData.score + Number.EPSILON) * 10) / 10)
       : ''
   );
 
@@ -106,7 +108,8 @@ export function AssignmentModal({
       return;
     }
 
-    const numMax = parseFloat(maxScore);
+    const parsedMax = parseFloat(maxScore.replace(',', '.'));
+    const numMax = Math.round((parsedMax + Number.EPSILON) * 10) / 10;
     if (isNaN(numMax) || numMax <= 0) {
       setErrorMessage('Максимальний бал повинен бути більшим за 0');
       return;
@@ -114,7 +117,8 @@ export function AssignmentModal({
 
     let numScore: number | null = null;
     if (hasScore && score.trim() !== '') {
-      numScore = parseFloat(score);
+      const parsedScore = parseFloat(score.replace(',', '.'));
+      numScore = Math.round((parsedScore + Number.EPSILON) * 10) / 10;
       if (isNaN(numScore) || numScore < 0) {
         setErrorMessage('Отримана оцінка не може бути від’ємною');
         return;
@@ -265,12 +269,18 @@ export function AssignmentModal({
               <div className="relative">
                 <input
                   type="number"
-                  step="0.5"
-                  min="0.5"
+                  step="0.1"
+                  min="0.1"
                   max="100"
                   required
                   value={maxScore}
-                  onChange={(e) => setMaxScore(e.target.value)}
+                  onChange={(e) => setMaxScore(e.target.value.replace(',', '.'))}
+                  onKeyDown={(e) => {
+                    if (e.key === ',') {
+                      e.preventDefault();
+                      setMaxScore((prev) => (prev.includes('.') ? prev : prev + '.'));
+                    }
+                  }}
                   placeholder="10"
                   className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 pl-3.5 pr-8 py-2.5 text-sm font-bold text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
                 />
@@ -373,11 +383,17 @@ export function AssignmentModal({
                 <span className="text-xs text-zinc-500">Отриманий бал:</span>
                 <input
                   type="number"
-                  step="0.5"
+                  step="0.1"
                   min="0"
-                  max={maxScore || 100}
+                  max={maxScore ? parseFloat(maxScore.replace(',', '.')) || 100 : 100}
                   value={score}
-                  onChange={(e) => setScore(e.target.value)}
+                  onChange={(e) => setScore(e.target.value.replace(',', '.'))}
+                  onKeyDown={(e) => {
+                    if (e.key === ',') {
+                      e.preventDefault();
+                      setScore((prev) => (prev.includes('.') ? prev : prev + '.'));
+                    }
+                  }}
                   placeholder="0"
                   className="w-20 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2.5 py-1 text-sm font-bold text-center text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
                 />
