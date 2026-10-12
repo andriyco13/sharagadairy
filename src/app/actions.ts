@@ -345,21 +345,11 @@ export async function createAssignmentAction({
   score,
 }: CreateAssignmentParams) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, error: 'Необхідно увійти в систему' };
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
     }
-
-    const subject = await prisma.subject.findUnique({
-      where: { id: subjectId },
-    });
-    if (!subject) {
-      return { success: false, error: 'Предмет не знайдено' };
-    }
-
-    if (user.role !== 'ADMIN' && user.groupId !== subject.groupId) {
-      return { success: false, error: '403 Forbidden: Доступ заборонено' };
-    }
+    const user = auth.user;
 
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
@@ -442,7 +432,7 @@ export interface UpdateAssignmentParams {
 }
 
 /**
- * Updates an Assignment and upserts or removes its UserGrade
+ * Updates an Assignment and upserts or removes its UserGrade (ADMIN ONLY)
  */
 export async function updateAssignmentAction({
   assignmentId,
@@ -452,22 +442,11 @@ export async function updateAssignmentAction({
   score,
 }: UpdateAssignmentParams) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, error: 'Необхідно увійти в систему' };
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
     }
-
-    const assignment = await prisma.assignment.findUnique({
-      where: { id: assignmentId },
-      include: { subject: true },
-    });
-    if (!assignment) {
-      return { success: false, error: 'Роботу не знайдено' };
-    }
-
-    if (user.role !== 'ADMIN' && user.groupId !== assignment.subject.groupId) {
-      return { success: false, error: '403 Forbidden: Доступ заборонено' };
-    }
+    const user = auth.user;
 
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
@@ -565,25 +544,13 @@ export async function updateAssignmentAction({
 }
 
 /**
- * Deletes an Assignment by ID
+ * Deletes an Assignment by ID (ADMIN ONLY)
  */
 export async function deleteAssignmentAction(assignmentId: string) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, error: 'Необхідно увійти в систему' };
-    }
-
-    const assignment = await prisma.assignment.findUnique({
-      where: { id: assignmentId },
-      include: { subject: true },
-    });
-    if (!assignment) {
-      return { success: false, error: 'Роботу не знайдено' };
-    }
-
-    if (user.role !== 'ADMIN' && user.groupId !== assignment.subject.groupId) {
-      return { success: false, error: '403 Forbidden: Доступ заборонено' };
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
     }
 
     await prisma.assignment.delete({
@@ -595,6 +562,118 @@ export async function deleteAssignmentAction(assignmentId: string) {
   } catch (error) {
     console.error('Error deleting assignment:', error);
     return { success: false, error: 'Не вдалося видалити роботу' };
+  }
+}
+
+export interface SaveUserGradeParams {
+  assignmentId: string;
+  score: number | string;
+}
+
+/**
+ * Saves or updates a student's personal grade (UserGrade) for an assignment.
+ * Accessible to any authenticated student (role === 'STUDENT' or 'ADMIN').
+ * Enforces session authentication: students can only save/update their own grade.
+ */
+export async function saveUserGradeAction({
+  assignmentId,
+  score,
+}: SaveUserGradeParams) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: 'Необхідно увійти в систему' };
+    }
+
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      include: { subject: true },
+    });
+
+    if (!assignment) {
+      return { success: false, error: 'Роботу не знайдено' };
+    }
+
+    if (user.role !== 'ADMIN' && user.groupId !== assignment.subject.groupId) {
+      return { success: false, error: '403 Forbidden: Доступ заборонено' };
+    }
+
+    const parsedScore =
+      typeof score === 'string' ? parseFloat(score.replace(',', '.')) : Number(score);
+    const numScore = Math.round((parsedScore + Number.EPSILON) * 10) / 10;
+
+    if (isNaN(numScore) || numScore < 0) {
+      return { success: false, error: 'Введіть коректний бал (число від 0)' };
+    }
+
+    if (numScore > assignment.maxScore) {
+      return {
+        success: false,
+        error: `Бал (${numScore}) не може перевищувати максимальний (${assignment.maxScore} б.)`,
+      };
+    }
+
+    const grade = await prisma.userGrade.upsert({
+      where: {
+        userId_assignmentId: {
+          userId: user.id,
+          assignmentId,
+        },
+      },
+      update: {
+        score: numScore,
+        earnedAt: new Date(),
+      },
+      create: {
+        userId: user.id,
+        assignmentId,
+        score: numScore,
+        earnedAt: new Date(),
+      },
+    });
+
+    safeRevalidate('/');
+    return {
+      success: true,
+      grade: {
+        id: grade.id,
+        score: grade.score,
+        earnedAt: grade.earnedAt,
+      },
+    };
+  } catch (error) {
+    console.error('Error saving user grade:', error);
+    return { success: false, error: 'Не вдалося зберегти оцінку' };
+  }
+}
+
+export const setUserGradeAction = saveUserGradeAction;
+export const saveGradeAction = saveUserGradeAction;
+
+/**
+ * Deletes a student's personal grade (UserGrade) for an assignment.
+ * Accessible to any authenticated student (role === 'STUDENT' or 'ADMIN').
+ * Enforces session authentication: students can only delete their own grade.
+ */
+export async function deleteUserGradeAction(assignmentId: string) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: 'Необхідно увійти в систему' };
+    }
+
+    await prisma.userGrade.deleteMany({
+      where: {
+        userId: user.id,
+        assignmentId,
+      },
+    });
+
+    safeRevalidate('/');
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting user grade:', error);
+    return { success: false, error: 'Не вдалося видалити оцінку' };
   }
 }
 

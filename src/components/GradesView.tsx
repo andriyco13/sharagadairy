@@ -21,6 +21,7 @@ import {
   User,
 } from 'lucide-react';
 import { AssignmentModal, AssignmentFormData } from './AssignmentModal';
+import { GradeModal, GradeModalAssignment } from './GradeModal';
 import { SubjectModal, SubjectModalData } from './SubjectModal';
 import {
   deleteAssignmentAction,
@@ -83,6 +84,11 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
   const [modalSubject, setModalSubject] = useState<{ id: string; name: string } | null>(null);
   const [modalInitialData, setModalInitialData] = useState<AssignmentFormData | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Student Personal Grade Modal state
+  const [gradeModalSubject, setGradeModalSubject] = useState<string>('');
+  const [gradeModalAssignment, setGradeModalAssignment] = useState<GradeModalAssignment | null>(null);
+  const [isGradeModalOpen, setIsGradeModalOpen] = useState(false);
 
   // Delete confirmation modal state
   const [deletingAssignment, setDeletingAssignment] = useState<{
@@ -257,6 +263,48 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
   const ratingStatus = getRatingStatus();
 
   // Modal handlers
+  const handleOpenGradeModal = (
+    subjectName: string,
+    assignment: SubjectWithGrades['assignments'][0]
+  ) => {
+    setGradeModalSubject(subjectName);
+    setGradeModalAssignment(assignment);
+    setIsGradeModalOpen(true);
+  };
+
+  const handleGradeSaved = (
+    assignmentId: string,
+    newScore: number | null,
+    gradeId?: string
+  ) => {
+    const updated = subjects.map((subj) => ({
+      ...subj,
+      assignments: subj.assignments.map((a) => {
+        if (a.id !== assignmentId) return a;
+        if (newScore === null) {
+          return {
+            ...a,
+            userGrades: [],
+          };
+        }
+        return {
+          ...a,
+          userGrades: [
+            {
+              id: gradeId || a.userGrades[0]?.id || 'grade-' + Date.now(),
+              score: newScore,
+              earnedAt: new Date(),
+            },
+          ],
+        };
+      }),
+    }));
+
+    if (onSubjectsChange) {
+      onSubjectsChange(updated);
+    }
+  };
+
   const handleOpenCreate = (subjectId: string, subjectName: string) => {
     setModalSubject({ id: subjectId, name: subjectName });
     setModalInitialData(null);
@@ -889,14 +937,16 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
                       </span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleOpenCreate(subject.id, subject.name)}
-                      className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 text-xs font-bold text-white transition-colors shadow-2xs cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Додати роботу</span>
-                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCreate(subject.id, subject.name)}
+                        className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 text-xs font-bold text-white transition-colors shadow-2xs cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Додати роботу</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -928,7 +978,8 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
                       return (
                         <div
                           key={assignment.id}
-                          className="group/item flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl bg-zinc-50/80 dark:bg-zinc-800/40 p-3 border border-zinc-200/50 dark:border-zinc-800/80 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
+                          onClick={() => handleOpenGradeModal(subject.name, assignment)}
+                          className="group/item flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl bg-zinc-50/80 dark:bg-zinc-800/40 p-3 border border-zinc-200/50 dark:border-zinc-800/80 transition-all hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 hover:border-indigo-300 dark:hover:border-indigo-800/70 cursor-pointer"
                         >
                           {/* Left: Status icon, Title, Due date badge */}
                           <div className="flex items-start sm:items-center gap-2.5 min-w-0 flex-1">
@@ -968,12 +1019,7 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
                           {/* Right: Score badge & Action buttons */}
                           <div className="flex items-center justify-between sm:justify-end gap-2.5 shrink-0 pl-6 sm:pl-0">
                             {/* Score */}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEdit(subject.id, subject.name, assignment)}
-                              className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
-                              title="Редагувати роботу та бал"
-                            >
+                            <div className="flex items-center gap-1.5">
                               {hasGrade ? (
                                 <div className="flex items-center gap-1">
                                   <span className="rounded-md bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-emerald-700 dark:text-emerald-300 font-bold text-xs sm:text-sm">
@@ -987,36 +1033,45 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
                                 </div>
                               ) : (
                                 <span className="rounded-md bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-2 py-0.5 text-zinc-500 dark:text-zinc-400 text-xs font-medium transition-colors">
-                                  до {aMax} б.
+                                  до {aMax} б. (вказати бал)
                                 </span>
                               )}
-                            </button>
-
-                            {/* Action Buttons: Edit and Delete */}
-                            <div className="flex items-center gap-1 opacity-80 sm:opacity-0 group-hover/item:opacity-100 transition-opacity">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEdit(subject.id, subject.name, assignment)}
-                                className="p-1 rounded-lg text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-zinc-200/60 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
-                                title="Редагувати роботу"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setDeletingAssignment({
-                                    id: assignment.id,
-                                    title: assignment.title,
-                                    subjectId: subject.id,
-                                  })
-                                }
-                                className="p-1 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-zinc-200/60 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
-                                title="Видалити роботу"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
                             </div>
+
+                            {/* Action Buttons: Edit and Delete (ADMIN ONLY) */}
+                            {isAdmin && (
+                              <div
+                                className="flex items-center gap-1 opacity-80 sm:opacity-0 group-hover/item:opacity-100 transition-opacity"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenEdit(subject.id, subject.name, assignment);
+                                  }}
+                                  className="p-1 rounded-lg text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-zinc-200/60 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+                                  title="Редагувати параметри роботи (ADMIN)"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeletingAssignment({
+                                      id: assignment.id,
+                                      title: assignment.title,
+                                      subjectId: subject.id,
+                                    });
+                                  }}
+                                  className="p-1 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-zinc-200/60 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+                                  title="Видалити роботу з плану (ADMIN)"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -1024,16 +1079,20 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
                   ) : (
                     <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-4 text-center space-y-2">
                       <p className="text-xs text-zinc-400">
-                        У цьому предметі ще немає робіт. Натисніть «+ Додати роботу», щоб створити першу!
+                        {isAdmin
+                          ? 'У цьому предметі ще немає робіт. Натисніть «+ Додати роботу», щоб створити першу!'
+                          : 'У цьому предметі ще немає доданих робіт.'}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenCreate(subject.id, subject.name)}
-                        className="inline-flex items-center gap-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-zinc-700 dark:text-zinc-300 hover:text-indigo-600 dark:hover:text-indigo-400 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>Додати роботу</span>
-                      </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenCreate(subject.id, subject.name)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-zinc-700 dark:text-zinc-300 hover:text-indigo-600 dark:hover:text-indigo-400 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Додати роботу</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1164,6 +1223,18 @@ export function GradesView({ subjects, onSubjectsChange, isAdmin = false }: Grad
           </div>
         </div>
       )}
+
+      {/* Student Personal Grade Modal */}
+      <GradeModal
+        isOpen={isGradeModalOpen}
+        onClose={() => {
+          setIsGradeModalOpen(false);
+          setGradeModalAssignment(null);
+        }}
+        subjectName={gradeModalSubject}
+        assignment={gradeModalAssignment}
+        onGradeSaved={handleGradeSaved}
+      />
     </div>
   );
 }
