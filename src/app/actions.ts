@@ -345,11 +345,21 @@ export async function createAssignmentAction({
   score,
 }: CreateAssignmentParams) {
   try {
-    const auth = await verifyAdmin();
-    if (!auth.authorized) {
-      return { success: false, error: auth.error };
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: 'Необхідно увійти в систему' };
     }
-    const user = auth.user;
+
+    const subject = await prisma.subject.findUnique({
+      where: { id: subjectId },
+    });
+    if (!subject) {
+      return { success: false, error: 'Предмет не знайдено' };
+    }
+
+    if (user.role !== 'ADMIN' && user.groupId !== subject.groupId) {
+      return { success: false, error: '403 Forbidden: Доступ заборонено' };
+    }
 
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
@@ -442,11 +452,22 @@ export async function updateAssignmentAction({
   score,
 }: UpdateAssignmentParams) {
   try {
-    const auth = await verifyAdmin();
-    if (!auth.authorized) {
-      return { success: false, error: auth.error };
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: 'Необхідно увійти в систему' };
     }
-    const user = auth.user;
+
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      include: { subject: true },
+    });
+    if (!assignment) {
+      return { success: false, error: 'Роботу не знайдено' };
+    }
+
+    if (user.role !== 'ADMIN' && user.groupId !== assignment.subject.groupId) {
+      return { success: false, error: '403 Forbidden: Доступ заборонено' };
+    }
 
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
@@ -548,9 +569,21 @@ export async function updateAssignmentAction({
  */
 export async function deleteAssignmentAction(assignmentId: string) {
   try {
-    const auth = await verifyAdmin();
-    if (!auth.authorized) {
-      return { success: false, error: auth.error };
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: 'Необхідно увійти в систему' };
+    }
+
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      include: { subject: true },
+    });
+    if (!assignment) {
+      return { success: false, error: 'Роботу не знайдено' };
+    }
+
+    if (user.role !== 'ADMIN' && user.groupId !== assignment.subject.groupId) {
+      return { success: false, error: '403 Forbidden: Доступ заборонено' };
     }
 
     await prisma.assignment.delete({
