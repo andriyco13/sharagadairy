@@ -62,11 +62,35 @@ export default async function AdminPage() {
     ],
   });
 
+  // 4. Fetch all users
+  const users = await prisma.user.findMany({
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      groupId: true,
+      notifyTelegram: true,
+      telegramChatId: true,
+      createdAt: true,
+      group: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: [
+      { name: 'asc' },
+    ],
+  });
+
   return (
     <AdminDashboard
       initialGroups={groups}
       initialSubjects={subjects}
       initialSchedules={schedules}
+      initialUsers={users}
       currentAdminUser={user}
     />
   );

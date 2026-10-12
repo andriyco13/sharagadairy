@@ -1,7 +1,9 @@
 'use server';
 
+import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { hashPassword, verifyPassword, createSession, destroySession, getCurrentUser, verifyAdmin } from '@/lib/auth';
+import { sendTelegramMessage } from '@/lib/notifications';
 import { revalidatePath } from 'next/cache';
 import { WeekType, LessonType } from '@prisma/client';
 import { getBellSchedule } from '@/lib/constants';
@@ -282,6 +284,210 @@ export async function saveNewGroupScheduleAction(
   } catch (error) {
     console.error('Error saving new group schedule:', error);
     return { success: false, error: 'Не вдалося зберегти розклад' };
+  }
+}
+
+/**
+ * Requests password reset via Telegram bot.
+ */
+export async function requestPasswordResetAction(emailInput: string): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> {
+  try {
+    const email = emailInput.trim().toLowerCase();
+    if (!email) {
+      return { success: false, error: 'Введіть адресу електронної пошти' };
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      return { success: false, error: 'Користувача з такою електронною поштою не знайдено' };
+    }
+
+    if (!user.telegramChatId || user.notifyTelegram === false) {
+      return {
+        success: false,
+        error: "До цього акаунта не прив'язано Telegram-бота. Зверніться до адміністратора групи для скидання пароля",
+      };
+    }
+
+    // Generate random secure 32-byte hex token (valid for 15 minutes)
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    // Remove old reset tokens for this user
+    await prisma.passwordResetToken.deleteMany({
+      where: { userId: user.id },
+    });
+
+    // Save token to database
+    await prisma.passwordResetToken.create({
+      data: {
+        token,
+        userId: user.id,
+        expiresAt,
+      },
+    });
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'https://sharagadairy.vercel.app';
+    const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+
+    const text = `🔐 Запит на відновлення пароля у Sharaga.\n\nПерейдіть за посиланням, щоб встановити новий пароль:\n${resetUrl}\n\nПосилання дійсне 15 хвилин. Якщо це були не ви — проігноруйте.`;
+
+    const sent = await sendTelegramMessage(user.telegramChatId, text, 'HTML');
+    if (!sent) {
+      console.warn('Failed to send Telegram message to chatId:', user.telegramChatId);
+      return {
+        success: false,
+        error: 'Не вдалося відправити повідомлення в Telegram. Перевірте, чи не заблоковано бота, або зверніться до адміністратора.',
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Посилання для скидання пароля надіслано у ваш Telegram!',
+    };
+  } catch (error) {
+    console.error('Error requesting password reset:', error);
+    return { success: false, error: 'Сталася помилка при скиданні пароля. Спробуйте пізніше.' };
+  }
+}
+
+/**
+ * Validates whether a password reset token exists and has not expired.
+ */
+export async function verifyResetTokenAction(token: string): Promise<{
+  valid: boolean;
+  error?: string;
+}> {
+  try {
+    if (!token || typeof token !== 'string') {
+      return { valid: false, error: 'Недійсне посилання для скидання пароля' };
+    }
+
+    const resetRecord = await prisma.passwordResetToken.findUnique({
+      where: { token },
+    });
+
+    if (!resetRecord) {
+      return { valid: false, error: 'Посилання для скидання пароля недійсне або вже було використане' };
+    }
+
+    if (resetRecord.expiresAt < new Date()) {
+      return { valid: false, error: 'Термін дії посилання закінчився (посилання дійсне 15 хвилин)' };
+    }
+
+    return { valid: true };
+  } catch (error) {
+    console.error('Error verifying reset token:', error);
+    return { valid: false, error: 'Помилка перевірки посилання' };
+  }
+}
+
+/**
+ * Sets a new password using a valid reset token.
+ */
+export async function resetPasswordAction(token: string, newPassword: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    if (!token) {
+      return { success: false, error: 'Відсутній токен для скидання пароля' };
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, error: 'Пароль повинен містити щонайменше 6 символів' };
+    }
+
+    const resetRecord = await prisma.passwordResetToken.findUnique({
+      where: { token },
+    });
+
+    if (!resetRecord) {
+      return { success: false, error: 'Посилання недійсне або вже було використане' };
+    }
+
+    if (resetRecord.expiresAt < new Date()) {
+      await prisma.passwordResetToken.delete({ where: { id: resetRecord.id } }).catch(() => {});
+      return { success: false, error: 'Термін дії посилання закінчився. Запитайте нове посилання.' };
+    }
+
+    const hashedPassword = await hashPassword(newPassword);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: resetRecord.userId },
+        data: { password: hashedPassword },
+      }),
+      prisma.passwordResetToken.deleteMany({
+        where: { userId: resetRecord.userId },
+      }),
+    ]);
+
+    safeRevalidate('/login');
+    return { success: true };
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    return { success: false, error: 'Не вдалося скинути пароль. Спробуйте пізніше.' };
+  }
+}
+
+/**
+ * Admin action to manually generate a reset link for any student.
+ */
+export async function adminGeneratePasswordResetLinkAction(targetUserId: string): Promise<{
+  success: boolean;
+  link?: string;
+  userName?: string;
+  error?: string;
+}> {
+  try {
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return { success: false, error: auth.error };
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+    });
+
+    if (!targetUser) {
+      return { success: false, error: 'Користувача не знайдено' };
+    }
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    // Clear old tokens for this user
+    await prisma.passwordResetToken.deleteMany({
+      where: { userId: targetUser.id },
+    });
+
+    await prisma.passwordResetToken.create({
+      data: {
+        token,
+        userId: targetUser.id,
+        expiresAt,
+      },
+    });
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'https://sharagadairy.vercel.app';
+    const link = `${baseUrl}/reset-password?token=${token}`;
+
+    return {
+      success: true,
+      link,
+      userName: targetUser.name,
+    };
+  } catch (error) {
+    console.error('Error generating admin reset link:', error);
+    return { success: false, error: 'Не вдалося згенерувати посилання для скидання' };
   }
 }
 

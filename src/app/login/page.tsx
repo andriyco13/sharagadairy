@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   CalendarCheck2,
@@ -12,12 +12,16 @@ import {
   EyeOff,
   Sparkles,
   AlertCircle,
+  CheckCircle2,
   Loader2,
 } from 'lucide-react';
 import { loginAction, demoLoginAction } from '@/app/authActions';
 
-export default function LoginPage() {
+function LoginFormContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const resetSuccess = searchParams.get('reset') === 'success';
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -82,6 +86,13 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="mt-8 rounded-3xl bg-white dark:bg-zinc-900 p-6 sm:p-8 shadow-xl border border-zinc-200/80 dark:border-zinc-800">
+          {resetSuccess && (
+            <div className="mb-5 flex items-start gap-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900/60 p-3.5 text-xs text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-500" />
+              <span>Пароль успішно змінено! Тепер ви можете увійти з новим паролем.</span>
+            </div>
+          )}
+
           {error && (
             <div className="mb-5 flex items-start gap-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 p-3.5 text-xs text-rose-700 dark:text-rose-300">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
@@ -122,6 +133,12 @@ export default function LoginPage() {
                 >
                   Пароль
                 </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
+                >
+                  Забули пароль?
+                </Link>
               </div>
               <div className="relative rounded-xl shadow-2xs">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
@@ -202,5 +219,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        </div>
+      }
+    >
+      <LoginFormContent />
+    </Suspense>
   );
 }
