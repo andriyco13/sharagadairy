@@ -309,7 +309,7 @@ export async function requestPasswordResetAction(emailInput: string): Promise<{
       return { success: false, error: 'Користувача з такою електронною поштою не знайдено' };
     }
 
-    if (!user.telegramChatId || user.notifyTelegram === false) {
+    if (!user.telegramChatId) {
       return {
         success: false,
         error: "До цього акаунта не прив'язано Telegram-бота. Зверніться до адміністратора групи для скидання пароля",

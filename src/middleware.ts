@@ -14,12 +14,16 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. Exclude public auth routes (/login, /register) from auth checks to prevent redirect loops
+  // 2. Exclude public auth routes (/login, /register, /forgot-password, /reset-password) from auth checks to prevent redirect loops
   const isPublicRoute =
     pathname === '/login' ||
     pathname.startsWith('/login/') ||
     pathname === '/register' ||
-    pathname.startsWith('/register/');
+    pathname.startsWith('/register/') ||
+    pathname === '/forgot-password' ||
+    pathname.startsWith('/forgot-password/') ||
+    pathname === '/reset-password' ||
+    pathname.startsWith('/reset-password/');
 
   if (isPublicRoute) {
     return NextResponse.next();

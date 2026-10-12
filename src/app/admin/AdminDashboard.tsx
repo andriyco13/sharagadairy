@@ -1399,7 +1399,7 @@ export function AdminDashboard({
                     </thead>
                     <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
                       {filtered.map((u) => {
-                        const hasTelegram = Boolean(u.telegramChatId && u.notifyTelegram);
+                        const hasTelegram = Boolean(u.telegramChatId);
                         return (
                           <tr
                             key={u.id}
